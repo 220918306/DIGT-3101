@@ -39,4 +39,4 @@ Our development team follows Scrum methodology with clearly defined roles:
 ## 📚 Resources
 
 ### Documentation
-- [Product Backlog](https://github.com/220918306/DIGT-3101/commit/864d08fcbb156ddd35827035f5e364d371b62766#diff-a457108514d11e06d38568e533bd08f29a09f5e0561b9df6961db8744c41ad99)
+- [Agile Product Backlog](https://github.com/220918306/DIGT-3101/blob/main/agile-product-backlog.pdf)

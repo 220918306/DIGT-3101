@@ -40,3 +40,6 @@ Our development team follows Scrum methodology with clearly defined roles:
 
 ### Documentation
 - [Agile Product Backlog](https://github.com/220918306/DIGT-3101/blob/main/Deliverable1/agile-product-backlog.pdf)
+- [Gantt Chart Project Timeline](https://github.com/220918306/DIGT-3101/blob/main/REMS%20Project%20Timeline%20-%20Gantt%20Chart.pdf)
+- [Sprint Backlog](https://github.com/220918306/DIGT-3101/blob/main/Deliverable1/agile-sprint-backlogs%20deliverable%201.xlsx)
+- [Project Planning Milestone Document](https://github.com/220918306/DIGT-3101/blob/main/Deliverable1/DIGT3101%20-%20Deliverable%201%20.pdf)

@@ -10,9 +10,23 @@ class Api::V1::MaintenanceTicketsController < Api::V1::BaseController
   end
 
   # POST /api/v1/maintenance_tickets — FR-09: Submit maintenance request
+  # Accepts an optional lease_id param; if omitted, falls back to the tenant's
+  # single active lease. Tenants with multiple active leases must supply lease_id.
   def create
     authorize_roles!("tenant")
-    lease = Lease.find_by!(tenant_id: current_user.tenant.id, status: "active")
+
+    lease = if params[:lease_id].present?
+              Lease.find_by!(id: params[:lease_id], tenant_id: current_user.tenant.id, status: "active")
+            else
+              active = Lease.where(tenant_id: current_user.tenant.id, status: "active")
+              if active.count > 1
+                return render json: {
+                  error: "Multiple active leases found. Please supply a lease_id.",
+                  lease_ids: active.pluck(:id)
+                }, status: :unprocessable_entity
+              end
+              active.first!
+            end
 
     service = MaintenanceService.new
     ticket  = service.create_ticket(

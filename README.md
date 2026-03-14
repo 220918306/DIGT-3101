@@ -1,6 +1,6 @@
 # Real Estate Management System (REMS)
 
-A full-stack property management platform built with **Ruby on Rails 7.2** (API) and **React 18** (Vite). Tenants can search units, book viewings, apply for leases, pay invoices, and submit maintenance requests. Clerks manage applications and maintenance queues. Admins view system-wide reports.
+A full-stack property management platform built with **Ruby on Rails 7.2** (API) and **React 19** (Vite). Tenants can search units, book viewings, apply for leases, pay invoices, and submit maintenance requests. Clerks manage applications and maintenance queues. Admins view system-wide reports.
 
 ---
 
@@ -28,7 +28,7 @@ A full-stack property management platform built with **Ruby on Rails 7.2** (API)
 | Database | PostgreSQL 14+ |
 | Auth | JWT (ruby-jwt) + BCrypt |
 | Background Jobs | Sidekiq + Sidekiq-Cron + Redis |
-| Frontend | React 18, Vite, React Router v6 |
+| Frontend | React 19, Vite, React Router v7 |
 | Styling | TailwindCSS 3 |
 | HTTP Client | Axios |
 | Testing | Minitest, FactoryBot, Shoulda Matchers, DatabaseCleaner |
@@ -387,3 +387,42 @@ bundle exec sidekiq
 | **Pessimistic Locking** | `app/services/scheduling_service.rb` | `SELECT FOR UPDATE` on appointment slots ensures two tenants racing to book the same slot cannot both succeed |
 | **FCFS Queue** | `app/services/maintenance_service.rb` | Tickets are ordered by priority tier then `created_at` — within the same priority, earlier submissions are handled first |
 | **Idempotent Billing** | `app/services/billing_service.rb` | `generate_monthly_invoices` checks for an existing invoice before creating — the Sidekiq cron job can safely retry without duplicating charges |
+
+---
+
+## User Story Traceability
+
+| US ID | Description | Status | Notes |
+|---|---|---|---|
+| FR-01 | Search and filter available units | Implemented | Filters: status, price range, size, tier, purpose |
+| FR-02 | View unit detail | Implemented | Returns unit + property info |
+| FR-03 | Book a unit viewing (appointment) | Implemented | Pessimistic lock prevents double-booking |
+| FR-04 | Submit a rental application | Implemented | Tenant-only; tied to a specific unit |
+| FR-05 | Approve or reject application | Implemented | Clerk/Admin; triggers LeaseFactory on approval |
+| FR-06 | Create lease from approved application | Implemented | Factory Pattern — atomic transaction |
+| FR-07 | Generate monthly invoices | Implemented | Idempotent; safe to retry via Sidekiq Cron |
+| FR-08 | View invoice with line items | Implemented | Base rent, utilities, damage fees as separate line items |
+| FR-09 | Submit maintenance request | Implemented | Tenants with multiple leases must supply `lease_id` |
+| FR-10 | Record a payment | Implemented | Handles full and partial payments automatically |
+| FR-11 | Calculate utility charges | Implemented | Simulated consumption; rates defined in `UtilityService` |
+| FR-12 | View maintenance ticket queue | Implemented | FCFS within priority tier (emergency → urgent → routine) |
+| FR-13 | Tenant self-registration | Implemented | Creates User + Tenant in one request |
+| FR-14 | Update maintenance ticket status | Implemented | Clerk/Admin only |
+| FR-15 | Bill tenant for damage | Implemented | Creates invoice + line item; Admin only |
+| FR-16 | Occupancy report | Implemented | Per-property occupancy percentages |
+| FR-17 | Revenue report | Implemented | Monthly revenue breakdown |
+| FR-18 | Maintenance report | Implemented | Ticket volume and resolution stats |
+| NFR-01 | JWT stateless authentication | Implemented | HS256, 24-hour expiry, role-based access control |
+| NFR-08 | Concurrent booking safety | Implemented | `SELECT FOR UPDATE` in `SchedulingService` |
+| NFR-09 | FCFS maintenance queue | Implemented | Priority tier + `created_at` ordering |
+| NFR-10 | Email notifications | **Partially Implemented** | `NotificationService` logs all events via `Rails.logger`. Real SMTP/email delivery is deferred to a future iteration (see Known Scope Deferrals below) |
+
+---
+
+## Known Scope Deferrals
+
+| Item | Reason | Future Work |
+|---|---|---|
+| **Email delivery (NotificationService)** | `NotificationService` is intentionally a logging stub for this iteration. All notification events (booking confirmations, invoice reminders, emergency alerts, damage bills) are recorded in the Rails log. Wiring real SMTP delivery via ActionMailer was deferred to keep the delivery logic decoupled and testable without an email server. | Replace `Rails.logger` calls with `UserMailer` + ActionMailer in a future PR. |
+| **Utility consumption simulation** | `UtilityService#simulate_consumption` generates random values. Real meter API integration was out of scope for this deliverable. | Integrate real IoT/meter API endpoint in a future iteration. |
+| **Frontend test suite** | React component and integration tests (Vitest/React Testing Library) are not included in this deliverable. | Add `vitest` + `@testing-library/react` tests in a dedicated frontend-tests PR. |

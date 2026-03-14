@@ -14,7 +14,7 @@ class Api::V1::InvoicesController < Api::V1::BaseController
   # GET /api/v1/invoices/:id — FR-12: Detailed invoice with line items
   def show
     invoice = Invoice.includes(:invoice_line_items, :payments).find(params[:id])
-    authorize_invoice_access!(invoice)
+    return if authorize_invoice_access!(invoice)
     render json: invoice_json(invoice).merge(
       line_items: invoice.invoice_line_items.map { |li| line_item_json(li) },
       payments:   invoice.payments.map { |p| payment_json(p) }
@@ -31,10 +31,11 @@ class Api::V1::InvoicesController < Api::V1::BaseController
   private
 
   def authorize_invoice_access!(invoice)
-    return if current_user.clerk? || current_user.admin?
-    return if current_user.tenant? && invoice.tenant_id == current_user.tenant&.id
+    return false if current_user.clerk? || current_user.admin?
+    return false if current_user.tenant? && invoice.tenant_id == current_user.tenant&.id
 
     render json: { error: "Forbidden" }, status: :forbidden
+    true
   end
 
   def invoice_json(i)

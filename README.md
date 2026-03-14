@@ -1,0 +1,389 @@
+# Real Estate Management System (REMS)
+
+A full-stack property management platform built with **Ruby on Rails 7.2** (API) and **React 18** (Vite). Tenants can search units, book viewings, apply for leases, pay invoices, and submit maintenance requests. Clerks manage applications and maintenance queues. Admins view system-wide reports.
+
+---
+
+## Table of Contents
+
+1. [Tech Stack](#tech-stack)
+2. [Prerequisites](#prerequisites)
+3. [Project Structure](#project-structure)
+4. [Backend Setup](#backend-setup)
+5. [Frontend Setup](#frontend-setup)
+6. [Running the App](#running-the-app)
+7. [Demo Credentials](#demo-credentials)
+8. [API Reference](#api-reference)
+9. [Running the Test Suite](#running-the-test-suite)
+10. [Background Jobs](#background-jobs)
+11. [Architecture Notes](#architecture-notes)
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Backend | Ruby 3.3.5, Rails 7.2 (API mode) |
+| Database | PostgreSQL 14+ |
+| Auth | JWT (ruby-jwt) + BCrypt |
+| Background Jobs | Sidekiq + Sidekiq-Cron + Redis |
+| Frontend | React 18, Vite, React Router v6 |
+| Styling | TailwindCSS 3 |
+| HTTP Client | Axios |
+| Testing | Minitest, FactoryBot, Shoulda Matchers, DatabaseCleaner |
+
+---
+
+## Prerequisites
+
+Make sure the following are installed before you start:
+
+```bash
+ruby --version        # 3.3.5
+rails --version       # 7.2.x
+node --version        # 18+
+npm --version         # 9+
+psql --version        # 14+
+redis-server --version  # 7+
+```
+
+Install Ruby 3.3.5 via rbenv if needed:
+
+```bash
+rbenv install 3.3.5
+rbenv local 3.3.5
+```
+
+---
+
+## Project Structure
+
+```
+DIGT-3101/
+├── backend/                       # Rails 7.2 API
+│   ├── app/
+│   │   ├── controllers/api/v1/    # All API controllers
+│   │   ├── models/                # 13 domain models
+│   │   ├── services/              # Business logic services
+│   │   ├── factories/             # LeaseFactory (Factory Pattern)
+│   │   └── jobs/                  # Sidekiq background jobs
+│   ├── config/
+│   │   ├── routes.rb
+│   │   └── initializers/
+│   ├── db/
+│   │   ├── migrate/               # 13 migrations
+│   │   └── seeds.rb               # Demo data
+│   └── test/                      # Minitest suite (TC-01 to TC-34)
+│
+└── frontend/                      # React 18 + Vite
+    └── src/
+        ├── api/                   # Axios modules per resource
+        ├── context/               # AuthContext (JWT storage)
+        ├── components/            # Navbar, StatusBadge, LoadingSpinner
+        └── pages/
+            ├── tenant/            # Dashboard, UnitSearch, MyInvoices, Maintenance
+            ├── clerk/             # Dashboard, Applications, MaintenanceQueue, Invoices
+            └── admin/             # Dashboard, Reports
+```
+
+---
+
+## Backend Setup
+
+### 1. Navigate to the backend folder
+
+```bash
+cd DIGT-3101/backend
+```
+
+### 2. Install Ruby gems
+
+```bash
+bundle install
+```
+
+### 3. Configure the database
+
+The app reads database credentials from environment variables. Export them in your shell:
+
+```bash
+export DB_USERNAME=postgres
+export DB_PASSWORD=yourpassword
+export DB_HOST=localhost
+```
+
+Or open `config/database.yml` and replace the `ENV[...]` values with your local credentials directly.
+
+### 4. Create and migrate the database
+
+```bash
+rails db:create
+rails db:migrate
+```
+
+### 5. Seed demo data
+
+```bash
+rails db:seed
+```
+
+This creates 5 users, 2 properties, 6 units, 3 leases, invoices, maintenance tickets, and appointments so the app is immediately usable.
+
+Expected output:
+
+```
+Admin:   admin@rems.com   / password123
+Clerk:   clerk@rems.com   / password123
+Tenant1: tenant1@rems.com / password123  (active lease)
+Tenant2: tenant2@rems.com / password123  (active lease)
+Tenant3: tenant3@rems.com / password123  (pending application)
+```
+
+### 6. Start the Rails server
+
+```bash
+rails server -p 3000
+```
+
+The API is now running at `http://localhost:3000/api/v1`.
+
+---
+
+## Frontend Setup
+
+### 1. Navigate to the frontend folder
+
+```bash
+cd DIGT-3101/frontend
+```
+
+### 2. Install npm packages
+
+```bash
+npm install
+```
+
+### 3. Check the environment file
+
+A `.env` file should already exist. If not, create one:
+
+```
+VITE_API_URL=http://localhost:3000
+```
+
+### 4. Start the dev server
+
+```bash
+npm run dev
+```
+
+The app is now running at `http://localhost:5173`.
+
+> Vite proxies all `/api` requests to `http://localhost:3000`, so both servers can run simultaneously without CORS issues.
+
+---
+
+## Running the App
+
+Open **two terminal windows** and run both servers at the same time:
+
+**Terminal 1 — Backend:**
+
+```bash
+cd DIGT-3101/backend
+rails server -p 3000
+```
+
+**Terminal 2 — Frontend:**
+
+```bash
+cd DIGT-3101/frontend
+npm run dev
+```
+
+Then open `http://localhost:5173` in your browser.
+
+---
+
+## Demo Credentials
+
+| Role | Email | Password | What you can do |
+|---|---|---|---|
+| **Admin** | admin@rems.com | password123 | View all reports, manage system-wide data |
+| **Clerk** | clerk@rems.com | password123 | Approve applications, manage maintenance queue, generate invoices |
+| **Tenant 1** | tenant1@rems.com | password123 | Active lease — view invoices, pay, submit maintenance |
+| **Tenant 2** | tenant2@rems.com | password123 | Active lease — same as Tenant 1 |
+| **Tenant 3** | tenant3@rems.com | password123 | Pending application — search units, book viewings |
+
+---
+
+## API Reference
+
+All endpoints are prefixed with `/api/v1`.
+
+Protected endpoints require this header:
+
+```
+Authorization: Bearer <your_jwt_token>
+```
+
+You get the token from the login or register response.
+
+### Authentication (public)
+
+| Method | Endpoint | Body | Returns |
+|---|---|---|---|
+| POST | `/auth/login` | `{ email, password }` | `{ token, user }` |
+| POST | `/auth/register` | `{ name, email, password, phone }` | `{ token, user }` |
+
+### Units
+
+| Method | Endpoint | Role | Description |
+|---|---|---|---|
+| GET | `/units` | Any | List units. Filter with `?status=available&min_price=1000&max_price=2000` |
+| GET | `/units/:id` | Any | Unit detail |
+| GET | `/units/:id/available_slots` | Any | List open 1-hour viewing slots |
+
+### Appointments
+
+| Method | Endpoint | Role | Description |
+|---|---|---|---|
+| GET | `/appointments` | Any | List your appointments |
+| POST | `/appointments` | Tenant | Book a viewing — uses pessimistic lock to prevent double-booking |
+| PATCH | `/appointments/:id` | Any | Reschedule or update |
+| DELETE | `/appointments/:id` | Any | Cancel |
+
+### Applications
+
+| Method | Endpoint | Role | Description |
+|---|---|---|---|
+| GET | `/applications` | Any | Tenant sees own; Clerk and Admin see all pending |
+| POST | `/applications` | Tenant | Submit a rental application |
+| PATCH | `/applications/:id/approve` | Clerk/Admin | Approve — automatically creates a lease and marks unit occupied |
+| PATCH | `/applications/:id/reject` | Clerk/Admin | Reject application |
+
+### Leases
+
+| Method | Endpoint | Role | Description |
+|---|---|---|---|
+| GET | `/leases` | Any | List leases (tenant sees own) |
+| GET | `/leases/:id` | Any | Lease detail |
+| POST | `/leases` | Clerk/Admin | Create a lease manually |
+
+### Invoices and Payments
+
+| Method | Endpoint | Role | Description |
+|---|---|---|---|
+| GET | `/invoices` | Any | Tenant sees own; Clerk/Admin see all |
+| GET | `/invoices/:id` | Any | Invoice with full line items and payment history |
+| POST | `/invoices/generate` | Clerk/Admin | Trigger monthly invoice generation for all active leases |
+| POST | `/payments` | Tenant | Record a payment — handles full and partial automatically |
+
+### Maintenance Tickets
+
+| Method | Endpoint | Role | Description |
+|---|---|---|---|
+| GET | `/maintenance_tickets` | Any | Tenant sees own; Clerk gets FCFS priority-sorted queue |
+| POST | `/maintenance_tickets` | Tenant | Submit a new ticket |
+| PATCH | `/maintenance_tickets/:id` | Clerk/Admin | Update ticket status |
+| POST | `/maintenance_tickets/:id/bill_damage` | Admin | Charge tenant for damage repair |
+
+### Utility Consumptions
+
+| Method | Endpoint | Role | Description |
+|---|---|---|---|
+| GET | `/utility_consumptions` | Clerk/Admin | List all utility records |
+| GET | `/utility_consumptions/:id` | Clerk/Admin | Detail for one record |
+
+### Reports (Clerk and Admin only)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/reports/occupancy` | Per-property occupancy percentages |
+| GET | `/reports/revenue` | Monthly revenue breakdown |
+| GET | `/reports/maintenance` | Ticket volume and average resolution time |
+
+---
+
+## Running the Test Suite
+
+```bash
+cd DIGT-3101/backend
+rails test
+```
+
+Run only model tests:
+
+```bash
+rails test test/models/
+```
+
+Run only service tests:
+
+```bash
+rails test test/services/
+```
+
+Run a single file:
+
+```bash
+rails test test/services/billing_service_test.rb
+```
+
+### What is tested (30 tests, TC-01 to TC-34)
+
+| File | Test Cases | What is covered |
+|---|---|---|
+| `test/models/user_test.rb` | TC-01 to TC-05 | Validations, BCrypt password hashing, role enum |
+| `test/models/appointment_test.rb` | TC-06 to TC-12 | Double-booking prevention, out-of-hours rejection, scopes |
+| `test/models/lease_test.rb` | TC-13 to TC-19 | Payment cycles, status transitions |
+| `test/services/billing_service_test.rb` | TC-20 to TC-27 | Idempotency, discount tiers, line items, partial payments |
+| `test/services/maintenance_service_test.rb` | TC-28 to TC-34 | Strategy dispatch, FCFS queue, damage billing |
+
+Expected result:
+
+```
+30 runs, 30 assertions, 0 failures, 0 errors, 0 skips
+```
+
+---
+
+## Background Jobs
+
+The app uses Sidekiq for scheduled background tasks. To enable them:
+
+### 1. Start Redis
+
+```bash
+redis-server
+```
+
+### 2. Start Sidekiq
+
+```bash
+cd DIGT-3101/backend
+bundle exec sidekiq
+```
+
+### Scheduled jobs
+
+| Job | Runs | What it does |
+|---|---|---|
+| `GenerateInvoicesJob` | 1st of every month at 00:05 | Creates monthly invoices for all active leases. Safe to retry — skips leases already billed this period |
+| `MarkOverdueInvoicesJob` | Daily at 01:00 | Marks any unpaid past-due invoices as `overdue` |
+
+> Without Sidekiq running the app still works fully. You can trigger invoice generation manually via the clerk dashboard or by calling `POST /api/v1/invoices/generate`.
+
+---
+
+## Architecture Notes
+
+| Pattern | Location | Purpose |
+|---|---|---|
+| **Factory Pattern** | `app/factories/lease_factory.rb` | `LeaseFactory.create_from_application` wraps the entire lease creation in one transaction — application approval, lease creation, unit status change, and notification all succeed or all roll back together |
+| **Strategy Pattern** | `app/services/maintenance_service.rb` | `handle_by_priority` dispatches to the right handler based on ticket category. Adding a new priority tier requires one new method and one hash entry — no if/case chains |
+| **Observer Pattern** | `app/models/maintenance_ticket.rb` | `after_create` callback auto-escalates emergency tickets to `urgent` status without any controller involvement |
+| **Pessimistic Locking** | `app/services/scheduling_service.rb` | `SELECT FOR UPDATE` on appointment slots ensures two tenants racing to book the same slot cannot both succeed |
+| **FCFS Queue** | `app/services/maintenance_service.rb` | Tickets are ordered by priority tier then `created_at` — within the same priority, earlier submissions are handled first |
+| **Idempotent Billing** | `app/services/billing_service.rb` | `generate_monthly_invoices` checks for an existing invoice before creating — the Sidekiq cron job can safely retry without duplicating charges |

@@ -76,7 +76,7 @@ DIGT-3101/
 │   │   └── seeds.rb               # Demo data
 │   └── test/                      # Minitest suite (TC-01 to TC-34)
 │
-└── frontend/                      # React 18 + Vite
+└── frontend/                      # React 19 + Vite
     └── src/
         ├── api/                   # Axios modules per resource
         ├── context/               # AuthContext (JWT storage)
@@ -331,20 +331,39 @@ Run a single file:
 rails test test/services/billing_service_test.rb
 ```
 
-### What is tested (30 tests, TC-01 to TC-34)
+### What is tested (163 tests, 304 assertions, 98.84% coverage)
 
-| File | Test Cases | What is covered |
+| Test File | Tests | What is covered |
 |---|---|---|
-| `test/models/user_test.rb` | TC-01 to TC-05 | Validations, BCrypt password hashing, role enum |
-| `test/models/appointment_test.rb` | TC-06 to TC-12 | Double-booking prevention, out-of-hours rejection, scopes |
-| `test/models/lease_test.rb` | TC-13 to TC-19 | Payment cycles, status transitions |
-| `test/services/billing_service_test.rb` | TC-20 to TC-27 | Idempotency, discount tiers, line items, partial payments |
-| `test/services/maintenance_service_test.rb` | TC-28 to TC-34 | Strategy dispatch, FCFS queue, damage billing |
+| `models/user_test.rb` | 5 | Validations, BCrypt, role enum (TC-13–17) |
+| `models/appointment_test.rb` | 7 | Double-booking, out-of-hours, scopes (TC-01–05) |
+| `models/lease_test.rb` | 9 | Payment cycles (monthly/quarterly/biannual/annual), status (TC-18–22) |
+| `models/lease_factory_test.rb` | 5 | Factory Pattern: transaction, rollback (TC-25) |
+| `models/invoice_test.rb` | 3 | `overdue?` method, remaining balance |
+| `models/unit_test.rb` | 4 | `mark_as_occupied!`, `mark_as_available!`, scopes |
+| `services/billing_service_test.rb` | 10 | Idempotency, discount tiers, line items (TC-06–12, TC-27–28) |
+| `services/maintenance_service_test.rb` | 6 | Strategy dispatch, FCFS queue, damage billing (TC-29–34) |
+| `services/scheduling_service_test.rb` | 8 | Pessimistic lock, conflict detection, available slots |
+| `services/utility_service_test.rb` | 5 | Charge breakdown, idempotency (TC-24) |
+| `services/jwt_service_test.rb` | 4 | Encode/decode, expired token, tampered token |
+| `services/notification_service_test.rb` | 9 | All notification methods, overdue skip logic |
+| `controllers/auth_controller_test.rb` | 7 | Login (valid/invalid), register (valid/dup/missing) |
+| `controllers/units_controller_test.rb` | 14 | Filters, show, slots, 401/404 edge cases |
+| `controllers/appointments_controller_test.rb` | 9 | Book, conflict 409, update, cancel, cross-tenant protection |
+| `controllers/applications_controller_test.rb` | 8 | Create, approve, reject, status filter, role guards |
+| `controllers/leases_controller_test.rb` | 7 | Index, show, create, cross-tenant protection |
+| `controllers/invoices_controller_test.rb` | 8 | Index, show with line items, generate, access control |
+| `controllers/payments_controller_test.rb` | 5 | Full/partial payment, zero amount, already paid |
+| `controllers/reports_controller_test.rb` | 9 | Occupancy, revenue, maintenance, date filters, role guards |
+| `controllers/utility_consumptions_controller_test.rb` | 3 | Index (tenant/clerk), show |
+| `controllers/maintenance_tickets_controller_test.rb` | 13 | Multi-lease (TC-23), auth, bill_damage, priority queue |
+| `jobs/generate_invoices_job_test.rb` | 2 | Perform, idempotency |
+| `jobs/mark_overdue_invoices_job_test.rb` | 5 | Overdue marking, skip paid/future (TC-26) |
 
 Expected result:
 
 ```
-30 runs, 30 assertions, 0 failures, 0 errors, 0 skips
+163 runs, 304 assertions, 0 failures, 0 errors, 0 skips
 ```
 
 ---

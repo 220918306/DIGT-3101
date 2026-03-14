@@ -41,4 +41,29 @@ class LeaseTest < ActiveSupport::TestCase
                       billing_month: Date.today.beginning_of_month)
     assert_not lease.next_invoice_due?, "Should not be due when current month already invoiced"
   end
+
+  test "next_invoice_due? respects quarterly payment cycle" do
+    lease = create(:lease, tenant: @tenant, unit: @unit, payment_cycle: "quarterly")
+    create(:invoice, lease: lease, tenant: @tenant, billing_month: 2.months.ago.to_date.beginning_of_month)
+    refute lease.next_invoice_due?
+  end
+
+  test "next_invoice_due? respects biannual payment cycle" do
+    lease = create(:lease, tenant: @tenant, unit: @unit, payment_cycle: "biannual")
+    create(:invoice, lease: lease, tenant: @tenant, billing_month: 5.months.ago.to_date.beginning_of_month)
+    refute lease.next_invoice_due?
+  end
+
+  test "next_invoice_due? respects annual payment cycle" do
+    lease = create(:lease, tenant: @tenant, unit: @unit, payment_cycle: "annual")
+    create(:invoice, lease: lease, tenant: @tenant, billing_month: 11.months.ago.to_date.beginning_of_month)
+    refute lease.next_invoice_due?
+  end
+
+  test "next_invoice_due? defaults to 1 month for unknown payment cycle" do
+    lease = create(:lease, tenant: @tenant, unit: @unit, payment_cycle: "monthly")
+    lease.update_columns(payment_cycle: "custom_unknown")
+    create(:invoice, lease: lease, tenant: @tenant, billing_month: Date.today.beginning_of_month)
+    refute lease.next_invoice_due?
+  end
 end

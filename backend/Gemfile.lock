@@ -96,6 +96,7 @@ GEM
     debug (1.11.1)
       irb (~> 1.10)
       reline (>= 0.3.8)
+    docile (1.4.1)
     drb (2.2.3)
     erb (6.0.2)
     erubi (1.13.1)
@@ -253,6 +254,12 @@ GEM
       fugit (~> 1.8)
       globalid (>= 1.0.1)
       sidekiq (>= 6)
+    simplecov (0.22.0)
+      docile (~> 1.1)
+      simplecov-html (~> 0.11)
+      simplecov_json_formatter (~> 0.1)
+    simplecov-html (0.13.2)
+    simplecov_json_formatter (0.1.4)
     stringio (3.2.0)
     thor (1.5.0)
     timeout (0.6.1)
@@ -295,6 +302,7 @@ DEPENDENCIES
   shoulda-matchers (~> 5.0)
   sidekiq (~> 7.0)
   sidekiq-cron (~> 1.12)
+  simplecov
   tzinfo-data
 
 BUNDLED WITH

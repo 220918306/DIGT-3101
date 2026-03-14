@@ -14,7 +14,7 @@ class Api::V1::LeasesController < Api::V1::BaseController
   # GET /api/v1/leases/:id
   def show
     lease = Lease.includes(:unit, :tenant).find(params[:id])
-    authorize_lease_access!(lease)
+    return if authorize_lease_access!(lease)
     render json: lease_json(lease)
   end
 
@@ -36,10 +36,11 @@ class Api::V1::LeasesController < Api::V1::BaseController
   end
 
   def authorize_lease_access!(lease)
-    return if current_user.clerk? || current_user.admin?
-    return if current_user.tenant? && lease.tenant_id == current_user.tenant&.id
+    return false if current_user.clerk? || current_user.admin?
+    return false if current_user.tenant? && lease.tenant_id == current_user.tenant&.id
 
     render json: { error: "Forbidden" }, status: :forbidden
+    true
   end
 
   def lease_json(l)

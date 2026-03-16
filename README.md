@@ -2,8 +2,6 @@
 
 A full-stack property management platform built with **Ruby on Rails 7.2** (API) and **React 19** (Vite). 
 
-#test
-
 
 ---
 

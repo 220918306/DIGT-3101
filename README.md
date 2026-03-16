@@ -1,6 +1,9 @@
 # Real Estate Management System (REMS)
 
-A full-stack property management platform built with **Ruby on Rails 7.2** (API) and **React 19** (Vite). Tenants can search units, book viewings, apply for leases, pay invoices, and submit maintenance requests. Clerks manage applications and maintenance queues. Admins view system-wide reports.
+A full-stack property management platform built with **Ruby on Rails 7.2** (API) and **React 19** (Vite). 
+
+#test
+
 
 ---
 

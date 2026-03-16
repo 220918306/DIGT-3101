@@ -1,212 +1,355 @@
-# REMS — Real Estate Management System
-## DIGT-3101 Deliverable 3 — Full Implementation
+# Real Estate Management System (REMS)
 
-**Team 5 | Oshawa Centre Shopping Mall Tenant Management Platform**
+A full-stack property management platform built with **Ruby on Rails 7.2** (API) and **React 19** (Vite).
+
+---
+
+## Table of Contents
+
+1. [Tech Stack](#tech-stack)
+2. [Prerequisites](#prerequisites)
+3. [Quick Start](#quick-start)
+4. [Running the Tests](#running-the-tests)
+5. [Demo Credentials](#demo-credentials)
+6. [API Reference](#api-reference)
+7. [Architecture Notes](#architecture-notes)
+8. [User Story Traceability](#user-story-traceability)
+9. [Known Scope Deferrals](#known-scope-deferrals)
 
 ---
 
 ## Tech Stack
 
-| Layer       | Technology                                           |
-|-------------|------------------------------------------------------|
-| Backend     | Ruby 3.3.5, Rails 7.2 (API mode), PostgreSQL 14      |
-| Frontend    | React 18, Vite, React Router v6, Axios, TailwindCSS 3 |
-| Auth        | JWT (ruby-jwt gem) + BCrypt password hashing          |
-| Background  | Sidekiq + Sidekiq-Cron (monthly invoice generation)   |
-| Testing     | Minitest + FactoryBot + Shoulda Matchers + DatabaseCleaner |
+| Layer | Technology |
+|---|---|
+| Backend | Ruby 3.3.5, Rails 7.2 (API mode) |
+| Database | PostgreSQL 14+ |
+| Auth | JWT (ruby-jwt) + BCrypt |
+| Background Jobs | Sidekiq + Sidekiq-Cron + Redis |
+| Frontend | React 19, Vite, React Router v7, TailwindCSS |
+| HTTP Client | Axios |
+| Backend Testing | Minitest, FactoryBot, SimpleCov |
+| Frontend Testing | Vitest, React Testing Library, jsdom |
 
 ---
 
-## Roles & Access
+## Prerequisites
 
-| Role   | Capabilities |
-|--------|-------------|
-| **Tenant** | Search units (FR-01/02), book viewings (FR-03), apply for leases (FR-04), pay invoices (FR-07/08), submit maintenance tickets (FR-09), view utility usage (FR-11/12) |
-| **Clerk**  | Review/approve/reject applications (FR-05), create leases (FR-06), generate/manage invoices (FR-07), manage maintenance queue (FR-14/17/18), bill for damage (FR-15) |
-| **Admin**  | View all reports (FR-10): occupancy, revenue, maintenance metrics |
+Install these before you start:
+
+| Tool | Required Version | How to check |
+|---|---|---|
+| Ruby | 3.3.5 | `ruby --version` |
+| Bundler | 2.x | `bundler --version` |
+| Node.js | 18+ | `node --version` |
+| npm | 9+ | `npm --version` |
+| PostgreSQL | 14+ | `psql --version` |
+
+> **macOS:** Install Ruby via rbenv — `rbenv install 3.3.5 && rbenv local 3.3.5`
 
 ---
 
 ## Quick Start
 
-### Prerequisites
-- Ruby 3.3.5 (via rbenv)
-- Node.js 18+
-- PostgreSQL 14
-- Redis (for Sidekiq)
+### Step 1 — Clone the repo
 
-### Backend Setup
+```bash
+git clone https://github.com/220918306/DIGT-3101.git
+cd DIGT-3101
+```
+
+---
+
+### Step 2 — Backend setup
+
 ```bash
 cd backend
 bundle install
-
-# Database (uses rems_development / rems_test)
-rails db:create db:migrate db:seed
-
-# Start Rails API server (port 3000)
-rails s -p 3000
-
-# Start Sidekiq background worker (separate terminal)
-bundle exec sidekiq
 ```
 
-### Frontend Setup
+Set your Postgres credentials:
+
+```bash
+export DB_USERNAME=postgres
+export DB_PASSWORD=yourpassword
+export DB_HOST=localhost
+```
+
+> Or open `config/database.yml` and replace the `ENV[...]` values directly.
+
+Create, migrate, and seed the database:
+
+```bash
+rails db:create db:migrate db:seed
+```
+
+Start the Rails server:
+
+```bash
+rails server -p 3000
+```
+
+API is live at `http://localhost:3000/api/v1`.
+
+---
+
+### Step 3 — Frontend setup
+
+Open a **second terminal**:
+
 ```bash
 cd frontend
 npm install
-
-# Start Vite dev server (port 5173)
 npm run dev
 ```
 
-App runs at: **http://localhost:5173**
+App is live at `http://localhost:5173`.
+
+> All `/api` requests are automatically proxied to `http://localhost:3000` — no extra config needed.
+
+---
+
+## Running the Tests
+
+> You do **not** need the app servers running to run tests.
+
+---
+
+### Backend
+
+```bash
+cd backend
+bundle exec rails test
+```
+
+**Expected output:**
+
+```
+200 runs, 375 assertions, 0 failures, 0 errors, 0 skips
+Line Coverage: 98.72% (618/626 lines)
+```
+---
+
+### Frontend
+
+```bash
+cd frontend
+npm test -- --run
+```
+
+**Expected output:**
+
+```
+Test Files  8 passed (8)
+     Tests  36 passed (36)
+```
+
+---
+
+### Run a single test file
+
+**Backend:**
+```bash
+cd backend
+bundle exec rails test test/services/billing_service_test.rb
+```
+
+**Frontend:**
+```bash
+cd frontend
+npm test -- --run src/pages/tenant/MyInvoices.test.jsx
+```
+
+---
+
+### Backend test files — TC order (200 tests total)
+
+| TC | Test File | What is covered |
+|---|---|---|
+| TC-01 | `models/user_test.rb` | User validations, BCrypt password hashing, role enum |
+| TC-02 | `controllers/auth_controller_test.rb` | Login (valid/invalid), register (valid/duplicate/missing fields) |
+| TC-03 | `models/appointment_test.rb` | Double-booking prevention, out-of-hours guard, appointment scopes |
+| TC-03 | `controllers/appointments_controller_test.rb` | Book viewing, conflict 409, reschedule, cancel, cross-tenant protection |
+| TC-03 | `services/scheduling_service_test.rb` | Pessimistic lock, conflict detection, available slot listing |
+| TC-04 | `controllers/units_controller_test.rb` | Unit listing, filters (price/size/tier/status), detail, available slots, 401/404 |
+| TC-05 | `services/notification_service_test.rb` | Upcoming reminder, confirmed-only filter, cancelled appointment exclusion |
+| TC-06 | `controllers/applications_controller_test.rb` | Submit, approve, reject, status filter, role guards, TC-22 cancel |
+| TC-07 | `services/billing_service_test.rb` | Quarterly cycle: skips months 2 & 3, generates on month 4 |
+| TC-08 | `services/billing_service_test.rb` | Discount line item present for 2-lease tenant (5% tier) |
+| TC-09 | `services/billing_service_test.rb` | Re-running billing does not duplicate invoice for same period |
+| TC-10 | `models/unit_test.rb` | `mark_as_occupied!`, `mark_as_available!`, unit scopes |
+| TC-11 | `services/utility_service_test.rb` | Utility charge breakdown (electricity/water/waste), idempotency |
+| TC-12 | `controllers/invoices_controller_test.rb` | Invoice list, detail with line items, generate endpoint, access control |
+| TC-12 | `jobs/generate_invoices_job_test.rb` | Job perform, idempotency guard |
+| TC-13 | `services/notification_service_test.rb` | Overdue reminder increments counter, sets last_reminder_at, skips paid |
+| TC-14 | `services/notification_service_test.rb` | Reminders at 1, 7, 14, 30-day overdue intervals; partial-pay still reminded |
+| TC-15 | `jobs/mark_overdue_invoices_job_test.rb` | Marks past-due unpaid invoices overdue, skips paid and future invoices |
+| TC-16 | `controllers/payments_controller_test.rb` | Full payment, partial payment, zero amount rejection, already-paid guard |
+| TC-17 | `models/invoice_test.rb` | `overdue?` method, remaining balance calculation |
+| TC-18 | `models/lease_test.rb` | Payment cycles (monthly/quarterly/biannual/annual), status transitions |
+| TC-19 | `models/lease_factory_test.rb` | Factory Pattern: atomic transaction, rollback on failure |
+| TC-20 | `services/maintenance_service_test.rb` | Strategy dispatch, FCFS queue, damage billing, priority ordering |
+| TC-21 | `controllers/leases_controller_test.rb` | Unit history via `unit_id` filter, all statuses returned, tenant scoping |
+| TC-22 | `controllers/applications_controller_test.rb` | Tenant cancels own pending application, ownership check, state guard |
+| TC-23 | `controllers/maintenance_tickets_controller_test.rb` | Multi-lease tenant creation, status lifecycle open→in_progress→completed |
+| TC-24 | `controllers/leases_controller_test.rb` | Lease renewal creates new lease, expires old, inherits cycle, role guard |
+| TC-25 | `services/jwt_service_test.rb` | Encode/decode, expired token rejection, tampered token rejection |
+| TC-26 | `controllers/utility_consumptions_controller_test.rb` | List and detail, tenant vs clerk access |
+| TC-27 | `controllers/reports_controller_test.rb` | Occupancy, revenue, maintenance reports; date filters; role guards |
+| TC-28 | `test/system/end_to_end_flows_test.rb` | Tenant signs in and views available units (Capybara E2E) |
+| TC-33 | `services/billing_service_test.rb` | Quarterly cycle: skips months 2+3, generates on month 4 |
+| TC-34 | `services/billing_service_test.rb` | Annual cycle: skips at 6m and 11m, generates at month 12 |
+
+---
+
+### Frontend test files — TC order (36 tests total)
+
+| TC | Test File | What is covered |
+|---|---|---|
+| TC-01 | `src/pages/Login.test.jsx` | Email/password fields render, sign in button present |
+| TC-02 | `src/pages/Register.test.jsx` | All form fields render, heading, sign-in link, error banner on API failure |
+| TC-04 | `src/pages/tenant/UnitSearch.test.jsx` | Units load from API and display correctly |
+| TC-10 | `src/pages/tenant/MaintenanceRequest.test.jsx` | Priority buttons, ticket list, submit success, empty description error, API error |
+| TC-11 | `src/pages/tenant/MyInvoices.test.jsx` | Invoice list, Pay Now/View buttons, detail modal with line items, payment success |
+| TC-12 | `src/pages/clerk/InvoiceManagement.test.jsx` | Invoice table, revenue/outstanding totals, generate success and error messages |
+| TC-23 | `src/pages/clerk/MaintenanceQueue.test.jsx` | Queue listing, empty state, Update/Bill Damage buttons, status modal |
+| TC-25 | `src/pages/clerk/ApplicationsList.test.jsx` | Application list, Approve/Reject scoped to pending, modals, success messages |
 
 ---
 
 ## Demo Credentials
 
-| Role   | Email                  | Password    |
-|--------|------------------------|-------------|
-| Admin  | admin@rems.com         | password123 |
-| Clerk  | clerk@rems.com         | password123 |
-| Tenant | tenant1@rems.com       | password123 |
-| Tenant | tenant2@rems.com       | password123 |
-| Tenant | tenant3@rems.com       | password123 |
+After running `rails db:seed`:
+
+| Role | Email | Password |
+|---|---|---|
+| Admin | admin@rems.com | password123 |
+| Clerk | clerk@rems.com | password123 |
+| Tenant 1 (active lease) | tenant1@rems.com | password123 |
+| Tenant 2 (active lease) | tenant2@rems.com | password123 |
+| Tenant 3 (pending application) | tenant3@rems.com | password123 |
 
 ---
 
-## Test Suite
+## API Reference
 
-```bash
-cd backend
-rails test                         # Run all 30 tests
-rails test test/models/            # Model tests only
-rails test test/services/          # Service tests only
-```
-
-**Test coverage: 30 tests, 69 assertions — 0 failures**
-
-| Test ID | Description |
-|---------|-------------|
-| TC-01   | Valid appointment booking |
-| TC-02   | Rejects double booking of same slot |
-| TC-03   | Cancelled appointments don't block slots |
-| TC-04   | available_slots excludes booked hours |
-| TC-05   | Rejects bookings outside business hours |
-| TC-06   | Generates one invoice per active lease |
-| TC-07   | Idempotent invoice generation |
-| TC-08   | Invoice includes rent + utility line items |
-| TC-09   | Expired leases skipped in generation |
-| TC-10   | Full payment marks invoice as paid |
-| TC-11   | Overpayment marks invoice paid |
-| TC-12   | Partial payment with correct balance |
-| TC-13   | Valid user saves with all fields |
-| TC-14   | Duplicate email rejected |
-| TC-15   | Invalid email format rejected |
-| TC-16   | BCrypt password authentication |
-| TC-17   | Role enum validates allowed values |
-| TC-18   | Active lease with future end_date |
-| TC-19   | Expired lease returns active?=false |
-| TC-20   | calculate_discounted_rent precision |
-| TC-21   | next_invoice_due? true when no invoices |
-| TC-22   | next_invoice_due? false when current month invoiced |
-| TC-27   | 5% discount for 2 active leases |
-| TC-28   | 10% discount for 3+ active leases |
-| TC-29   | Emergency tickets first in queue |
-| TC-30   | Emergency auto-escalates on create |
-| TC-31   | Routine tickets ordered FCFS |
-| TC-32   | bill_for_damage creates damage invoice |
-| TC-33   | Creates ticket with correct attributes |
-| TC-34   | Completed tickets excluded from queue |
-
----
-
-## API Endpoints
+All endpoints are prefixed with `/api/v1`. Protected endpoints require:
 
 ```
-POST   /api/v1/auth/login
-POST   /api/v1/auth/register
-
-GET    /api/v1/units
-GET    /api/v1/units/:id
-GET    /api/v1/units/:id/available_slots
-
-GET    /api/v1/appointments
-POST   /api/v1/appointments
-PATCH  /api/v1/appointments/:id
-DELETE /api/v1/appointments/:id
-
-GET    /api/v1/applications
-POST   /api/v1/applications
-PATCH  /api/v1/applications/:id/approve
-PATCH  /api/v1/applications/:id/reject
-
-GET    /api/v1/leases
-GET    /api/v1/leases/:id
-POST   /api/v1/leases
-
-GET    /api/v1/invoices
-GET    /api/v1/invoices/:id
-POST   /api/v1/invoices/generate
-
-POST   /api/v1/payments
-
-GET    /api/v1/maintenance_tickets
-POST   /api/v1/maintenance_tickets
-PATCH  /api/v1/maintenance_tickets/:id
-POST   /api/v1/maintenance_tickets/:id/bill_damage
-
-GET    /api/v1/utility_consumptions
-GET    /api/v1/utility_consumptions/:id
-
-GET    /api/v1/reports/occupancy
-GET    /api/v1/reports/revenue
-GET    /api/v1/reports/maintenance
+Authorization: Bearer <token>
 ```
 
+Get your token from `POST /auth/login` or `POST /auth/register`.
+
+### Auth
+| Method | Endpoint | Body | Returns |
+|---|---|---|---|
+| POST | `/auth/login` | `{ email, password }` | `{ token, user }` |
+| POST | `/auth/register` | `{ name, email, password, phone }` | `{ token, user }` |
+
+### Units
+| Method | Endpoint | Role | Description |
+|---|---|---|---|
+| GET | `/units` | Any | List units. Filter: `?status=available&min_price=1000` |
+| GET | `/units/:id` | Any | Unit detail |
+| GET | `/units/:id/available_slots` | Any | Open 1-hour viewing slots |
+
+### Appointments
+| Method | Endpoint | Role | Description |
+|---|---|---|---|
+| GET | `/appointments` | Any | List your appointments |
+| POST | `/appointments` | Tenant | Book a viewing (pessimistic lock prevents double-booking) |
+| PATCH | `/appointments/:id` | Any | Reschedule or update |
+| DELETE | `/appointments/:id` | Any | Cancel |
+
+### Applications
+| Method | Endpoint | Role | Description |
+|---|---|---|---|
+| GET | `/applications` | Any | Tenant sees own; Clerk/Admin see all |
+| POST | `/applications` | Tenant | Submit a rental application |
+| DELETE | `/applications/:id` | Tenant | Cancel own pending application (TC-22) |
+| PATCH | `/applications/:id/approve` | Clerk/Admin | Approve — creates lease, marks unit occupied |
+| PATCH | `/applications/:id/reject` | Clerk/Admin | Reject with reason |
+
+### Leases
+| Method | Endpoint | Role | Description |
+|---|---|---|---|
+| GET | `/leases` | Any | Tenant sees own; Clerk/Admin see all. Filter: `?unit_id=5` for history (TC-21) |
+| GET | `/leases/:id` | Any | Lease detail |
+| POST | `/leases` | Clerk/Admin | Create lease manually |
+| POST | `/leases/:id/renew` | Clerk/Admin | Renew lease — creates new, expires old (TC-24) |
+
+### Invoices and Payments
+| Method | Endpoint | Role | Description |
+|---|---|---|---|
+| GET | `/invoices` | Any | Tenant sees own; Clerk/Admin see all. Filter: `?status=overdue` |
+| GET | `/invoices/:id` | Any | Invoice with full line items |
+| POST | `/invoices/generate` | Clerk/Admin | Trigger monthly invoice generation |
+| POST | `/payments` | Tenant | Record full or partial payment |
+
+### Maintenance Tickets
+| Method | Endpoint | Role | Description |
+|---|---|---|---|
+| GET | `/maintenance_tickets` | Any | Tenant sees own; Clerk gets priority-sorted queue |
+| POST | `/maintenance_tickets` | Tenant | Submit new ticket |
+| PATCH | `/maintenance_tickets/:id` | Clerk/Admin | Update status |
+| POST | `/maintenance_tickets/:id/bill_damage` | Admin | Charge tenant for damage |
+
+### Reports
+| Method | Endpoint | Role | Description |
+|---|---|---|---|
+| GET | `/reports/occupancy` | Clerk/Admin | Per-property occupancy % |
+| GET | `/reports/revenue` | Clerk/Admin | Monthly revenue breakdown |
+| GET | `/reports/maintenance` | Clerk/Admin | Ticket volume and resolution times |
+
 ---
 
-## Architecture & Design Patterns
+## Architecture Notes
 
-| Pattern | Where Used |
-|---------|-----------|
-| **Factory Pattern** | `LeaseFactory.create_from_application()` — creates lease from approved application |
-| **Strategy Pattern** | `MaintenanceService#handle_by_priority()` — different handling per priority level |
-| **Repository-like Services** | `BillingService`, `SchedulingService`, `UtilityService` — isolate business logic from controllers |
-| **Observer (after_create)** | `MaintenanceTicket` auto-escalates emergencies via callback |
-| **Pessimistic Locking** | `SchedulingService#book_appointment` — `FOR UPDATE` prevents race conditions (NFR-08) |
-| **FCFS Queue** | `MaintenanceService#prioritized_queue` — ordered by priority then created_at |
-
----
-
-## Background Jobs (Sidekiq Cron)
-
-| Job | Schedule | Purpose |
-|-----|----------|---------|
-| `GenerateInvoicesJob` | 1st of every month, midnight | Auto-generate monthly invoices for all active leases (FR-07) |
-| `MarkOverdueInvoicesJob` | Daily at 8 AM | Mark past-due invoices as overdue + send reminders (FR-08) |
+| Pattern | Location | Purpose |
+|---|---|---|
+| **Factory Pattern** | `app/factories/lease_factory.rb` | Wraps lease creation, unit update, and notification in one atomic transaction |
+| **Strategy Pattern** | `app/services/maintenance_service.rb` | Dispatches to the right handler by priority — adding a new tier needs one method, no if/case chains |
+| **Observer Pattern** | `app/models/maintenance_ticket.rb` | `after_create` auto-escalates emergency tickets without any controller involvement |
+| **Pessimistic Locking** | `app/services/scheduling_service.rb` | `SELECT FOR UPDATE` ensures two tenants racing for the same slot cannot both succeed |
+| **FCFS Queue** | `app/services/maintenance_service.rb` | Ordered by priority tier then `created_at` — earlier submissions handled first within same priority |
+| **Idempotent Billing** | `app/services/billing_service.rb` | Checks for existing invoice before creating — safe to retry via cron without duplicating charges |
 
 ---
 
-## FR Traceability
+## User Story Traceability
 
-| FR ID | Feature | Implementation |
-|-------|---------|----------------|
-| FR-01 | Search available units | `UnitsController#index` with filters |
-| FR-02 | View unit details | `UnitsController#show` |
-| FR-03 | Book viewings | `AppointmentsController#create` + `SchedulingService` |
-| FR-04 | Submit lease application | `ApplicationsController#create` |
-| FR-05 | Approve/reject applications | `ApplicationsController#approve/reject` + `LeaseFactory` |
-| FR-06 | Create lease | `LeasesController#create`, `LeaseFactory` |
-| FR-07 | Generate invoices | `InvoicesController#generate` + `BillingService` + Sidekiq cron |
-| FR-08 | Record payments | `PaymentsController#create` + `Invoice#mark_payment!` |
-| FR-09 | Submit maintenance requests | `MaintenanceTicketsController#create` + `MaintenanceService` |
-| FR-10 | System reports | `ReportsController#occupancy/revenue/maintenance` |
-| FR-11 | View utility usage | `UtilityConsumptionsController#index` |
-| FR-12 | Detailed invoice breakdown | Invoice line items, `InvoicesController#show` |
-| FR-13 | Tenant registration | `AuthController#register` |
-| FR-14 | Manage maintenance tickets | `MaintenanceTicketsController#update` |
-| FR-15 | Bill tenant for damage | `MaintenanceTicketsController#bill_damage` + `MaintenanceService` |
-| FR-16 | Multi-store discounts | `BillingService#DISCOUNT_TIERS` (5% at 2 leases, 10% at 3+) |
-| FR-17 | Emergency escalation | `MaintenanceTicket` after_create + `MaintenanceService#escalate_emergency` |
-| FR-18 | FCFS maintenance queue | `MaintenanceService#prioritized_queue` (Arel SQL priority ordering) |
+| FR | Description | Status | Notes |
+|---|---|---|---|
+| FR-01 | Search and filter available units | Implemented | Filters: status, price, size, tier, purpose |
+| FR-02 | View unit detail | Implemented | Returns unit + property info |
+| FR-03 | Book a unit viewing | Implemented | Pessimistic lock prevents double-booking |
+| FR-04 | Submit a rental application | Implemented | Tenant-only, tied to a specific unit |
+| FR-05 | Approve or reject application | Implemented | Clerk/Admin; triggers LeaseFactory on approval |
+| FR-06 | Create lease from approved application | Implemented | Atomic transaction via Factory Pattern |
+| FR-07 | Generate monthly invoices | Implemented | Idempotent; safe to retry via Sidekiq Cron |
+| FR-08 | View invoice with line items | Implemented | Base rent, utilities, discounts, damage fees |
+| FR-09 | Submit maintenance request | Implemented | Multi-lease tenants must supply `lease_id` |
+| FR-10 | Record a payment | Implemented | Full and partial payments handled automatically |
+| FR-11 | Calculate utility charges | Implemented | Simulated consumption; rates in `UtilityService` |
+| FR-12 | View maintenance ticket queue | Implemented | FCFS within priority tier |
+| FR-13 | Tenant self-registration | Implemented | Creates User + Tenant in one request |
+| FR-14 | Update maintenance ticket status | Implemented | Clerk/Admin only |
+| FR-15 | Bill tenant for damage | Implemented | Creates invoice + line item; Admin only |
+| FR-16 | Occupancy report | Implemented | Per-property occupancy percentages |
+| FR-17 | Revenue report | Implemented | Monthly revenue breakdown |
+| FR-18 | Maintenance report | Implemented | Ticket volume and resolution stats |
+| NFR-01 | JWT stateless authentication | Implemented | HS256, 24-hour expiry, role-based access control |
+| NFR-08 | Concurrent booking safety | Implemented | `SELECT FOR UPDATE` in `SchedulingService` |
+| NFR-09 | FCFS maintenance queue | Implemented | Priority tier + `created_at` ordering |
+| NFR-10 | Notifications | Partially Implemented | All events logged via `Rails.logger`; real SMTP deferred (see below) |
+
+---
+
+## Known Scope Deferrals
+
+| Item | Reason | Future Work |
+|---|---|---|
+| **Email delivery** | `NotificationService` logs all events to `Rails.logger`. Real SMTP via ActionMailer was deferred to keep the service decoupled and testable without an email server. | Replace log calls with `UserMailer` + ActionMailer in a future PR |
+| **Utility consumption** | `UtilityService#simulate_consumption` generates deterministic values. Real IoT/meter integration was out of scope. | Integrate real meter API in a future iteration |
+| **Performance tests PT-02/04/05** | JMeter plan design notes are in `perf/PT-02-05-notes.md`. Full JMeter execution requires a running server and is manual. | Execute against staging environment with JMeter |

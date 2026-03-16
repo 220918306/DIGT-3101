@@ -1,0 +1,20 @@
+feat: Level 4 coverage — 98.84% with 163 tests, bug fixes, CI, and docs
+
+Testing:
+- Add SimpleCov for automated coverage reporting (98.84%, 595/602 lines)
+- Add 92 new tests: controllers (auth, units, appointments, applications,
+  leases, invoices, payments, reports, maintenance, utilities),
+  services (scheduling, jwt, notification), jobs, and model edge cases
+- TC-23 through TC-26 implemented
+
+Bug fixes:
+- MaintenanceTicketsController create accepts lease_id for multi-store tenants
+- authorize_roles raises UnauthorizedError (prevents DoubleRenderError)
+- Wire ExpiredToken and UnauthorizedError into BaseController rescue_from
+- Fix authorize_lease_access and authorize_invoice_access to halt execution
+
+CI and docs:
+- Add PostgreSQL test job to GitHub Actions CI workflow
+- Fix README versions (React 19, React Router v7)
+- Add User Story Traceability table and Known Scope Deferrals
+- Create Deliverable3/README.md with coverage interpretation

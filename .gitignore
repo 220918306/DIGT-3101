@@ -9,6 +9,7 @@ backend/vendor/bundle/
 backend/config/master.key
 backend/config/credentials.yml.enc
 backend/storage/
+backend/coverage/
 
 # Node / React
 frontend/node_modules/

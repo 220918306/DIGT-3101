@@ -39,6 +39,23 @@ class Api::V1::ApplicationsController < Api::V1::BaseController
     render json: { application: application_json(app.reload), lease: lease_json(lease) }
   end
 
+  # DELETE /api/v1/applications/:id — TC-22: Tenant cancels their own pending application
+  def destroy
+    authorize_roles!("tenant")
+    app = Application.find(params[:id])
+
+    unless app.tenant_id == current_user.tenant&.id
+      return render json: { error: "Forbidden" }, status: :forbidden
+    end
+
+    unless app.status == "pending"
+      return render json: { error: "Only pending applications can be cancelled" }, status: :unprocessable_entity
+    end
+
+    app.update!(status: "cancelled", cancelled_at: Time.current)
+    render json: application_json(app)
+  end
+
   # PATCH /api/v1/applications/:id/reject — FR-05: Clerk rejects application
   def reject
     authorize_roles!("clerk", "admin")

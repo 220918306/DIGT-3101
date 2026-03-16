@@ -10,14 +10,16 @@ Rails.application.routes.draw do
 
       resources :appointments, only: [:index, :create, :update, :destroy]
 
-      resources :applications, only: [:index, :create] do
+      resources :applications, only: [:index, :create, :destroy] do
         member do
           patch :approve
           patch :reject
         end
       end
 
-      resources :leases, only: [:index, :show, :create]
+      resources :leases, only: [:index, :show, :create] do
+        member { post :renew }
+      end
 
       resources :invoices, only: [:index, :show] do
         collection { post :generate }

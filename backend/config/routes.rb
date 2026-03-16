@@ -1,0 +1,45 @@
+Rails.application.routes.draw do
+  namespace :api do
+    namespace :v1 do
+      post "auth/login",    to: "auth#login"
+      post "auth/register", to: "auth#register"
+
+      resources :units, only: [:index, :show] do
+        member { get :available_slots }
+      end
+
+      resources :appointments, only: [:index, :create, :update, :destroy]
+
+      resources :applications, only: [:index, :create, :destroy] do
+        member do
+          patch :approve
+          patch :reject
+        end
+      end
+
+      resources :leases, only: [:index, :show, :create] do
+        member { post :renew }
+      end
+
+      resources :invoices, only: [:index, :show] do
+        collection { post :generate }
+      end
+
+      resources :payments, only: [:create]
+
+      resources :maintenance_tickets, only: [:index, :create, :update] do
+        member { post :bill_damage }
+      end
+
+      resources :utility_consumptions, only: [:index, :show]
+
+      namespace :reports do
+        get :occupancy
+        get :revenue
+        get :maintenance
+      end
+    end
+  end
+
+  get "up" => "rails/health#show", as: :rails_health_check
+end

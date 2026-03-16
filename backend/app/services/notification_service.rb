@@ -46,6 +46,13 @@ class NotificationService
         "Lease ##{lease.id} created — Unit #{lease.unit_id} from #{lease.start_date} to #{lease.end_date}")
   end
 
+  # FR-03: Upcoming viewing appointment reminder (TC-05)
+  def send_upcoming_viewing_reminder(appointment)
+    log("UPCOMING_VIEWING_REMINDER", appointment.tenant_id,
+        "Reminder: Appointment ##{appointment.id} for Unit #{appointment.unit_id} " \
+        "is tomorrow at #{appointment.scheduled_time.strftime('%H:%M')}")
+  end
+
   # FR-08: Payment confirmation
   def send_payment_confirmation(payment)
     log("PAYMENT_CONFIRMED", payment.tenant_id,

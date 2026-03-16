@@ -133,6 +133,46 @@ class MaintenanceTicketsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "in_progress", JSON.parse(response.body)["status"]
   end
 
+  # TC-23 (report): Maintenance ticket status lifecycle — open → in_progress → completed
+  test "TC-23-report-a: clerk sets ticket from open to in_progress" do
+    ticket = create(:maintenance_ticket, lease: @lease1, tenant: @tenant, unit: @unit1,
+                    status: "open", priority: "routine", description: "Dripping tap")
+
+    patch "/api/v1/maintenance_tickets/#{ticket.id}",
+          params: { status: "in_progress" },
+          headers: { "Authorization" => "Bearer #{@clerk_token}" },
+          as: :json
+
+    assert_response :ok
+    assert_equal "in_progress", ticket.reload.status
+  end
+
+  test "TC-23-report-b: clerk sets ticket from in_progress to completed" do
+    ticket = create(:maintenance_ticket, lease: @lease1, tenant: @tenant, unit: @unit1,
+                    status: "in_progress", priority: "routine", description: "Dripping tap")
+
+    patch "/api/v1/maintenance_tickets/#{ticket.id}",
+          params: { status: "completed" },
+          headers: { "Authorization" => "Bearer #{@clerk_token}" },
+          as: :json
+
+    assert_response :ok
+    assert_equal "completed", ticket.reload.status
+  end
+
+  test "TC-23-report-c: admin can update ticket status to any valid value" do
+    ticket = create(:maintenance_ticket, lease: @lease1, tenant: @tenant, unit: @unit1,
+                    status: "open", priority: "urgent")
+
+    patch "/api/v1/maintenance_tickets/#{ticket.id}",
+          params: { status: "completed" },
+          headers: { "Authorization" => "Bearer #{@admin_token}" },
+          as: :json
+
+    assert_response :ok
+    assert_equal "completed", ticket.reload.status
+  end
+
   # --- bill_damage ---
 
   test "admin can bill a tenant for damage" do

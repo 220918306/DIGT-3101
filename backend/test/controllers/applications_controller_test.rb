@@ -84,6 +84,49 @@ class ApplicationsControllerTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_entity
   end
 
+  # TC-22: Tenant cancels their own pending application
+  test "TC-22a: tenant can cancel their own pending application" do
+    app = create(:application, tenant: @tenant, unit: @unit, status: "pending")
+
+    delete "/api/v1/applications/#{app.id}",
+           headers: { "Authorization" => "Bearer #{@tenant_token}" }
+
+    assert_response :ok
+    body = JSON.parse(response.body)
+    assert_equal "cancelled", body["status"], "application status should be 'cancelled'"
+    assert_not_nil app.reload.cancelled_at, "cancelled_at timestamp should be set"
+  end
+
+  test "TC-22b: tenant cannot cancel another tenant's application" do
+    other_tenant = create(:tenant)
+    app = create(:application, tenant: other_tenant, unit: @unit, status: "pending")
+
+    delete "/api/v1/applications/#{app.id}",
+           headers: { "Authorization" => "Bearer #{@tenant_token}" }
+
+    assert_response :forbidden
+    assert_equal "pending", app.reload.status
+  end
+
+  test "TC-22c: tenant cannot cancel an already-approved application" do
+    app = create(:application, tenant: @tenant, unit: @unit, status: "approved")
+
+    delete "/api/v1/applications/#{app.id}",
+           headers: { "Authorization" => "Bearer #{@tenant_token}" }
+
+    assert_response :unprocessable_entity
+    assert_equal "approved", app.reload.status
+  end
+
+  test "TC-22d: clerk cannot cancel an application via delete endpoint" do
+    app = create(:application, tenant: @tenant, unit: @unit, status: "pending")
+
+    delete "/api/v1/applications/#{app.id}",
+           headers: { "Authorization" => "Bearer #{@clerk_token}" }
+
+    assert_response :forbidden
+  end
+
   test "clerk can reject an application" do
     app = create(:application, tenant: @tenant, unit: @unit, status: "pending")
 

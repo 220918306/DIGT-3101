@@ -66,6 +66,16 @@ FactoryBot.define do
     employment_info  { "Employed full-time" }
   end
 
+  factory :letter do
+    association :tenant
+    association :lease
+    letter_type { "lease_agreement" }
+    status      { "sent" }
+    subject     { "Lease Agreement" }
+    body        { "Please review and sign your lease terms." }
+    sent_at     { Time.current }
+  end
+
   factory :lease do
     association :tenant
     association :unit, :occupied

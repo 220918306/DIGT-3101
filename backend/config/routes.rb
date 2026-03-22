@@ -4,7 +4,7 @@ Rails.application.routes.draw do
       post "auth/login",    to: "auth#login"
       post "auth/register", to: "auth#register"
 
-      resources :units, only: [:index, :show] do
+      resources :units, only: [:index, :show, :create, :update] do
         member { get :available_slots }
       end
 
@@ -17,12 +17,20 @@ Rails.application.routes.draw do
         end
       end
 
-      resources :leases, only: [:index, :show, :create] do
-        member { post :renew }
+      resources :leases, only: [:index, :show, :create, :update] do
+        member do
+          post :renew
+          post :send_agreement
+        end
+      end
+
+      resources :letters, only: [:index] do
+        member { post :sign }
       end
 
       resources :invoices, only: [:index, :show] do
         collection { post :generate }
+        member { patch :utilities }
       end
 
       resources :payments, only: [:create]

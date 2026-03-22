@@ -41,12 +41,20 @@ class AppointmentTest < ActiveSupport::TestCase
     assert appt_b.valid?, "Slot should be available after cancellation"
   end
 
+  test "rejected appointment does not block the same slot" do
+    time = 4.days.from_now.change(hour: 12)
+    Appointment.create!(unit: @unit, tenant: @tenant_a, scheduled_time: time, status: "rejected")
+
+    appt_b = Appointment.new(unit: @unit, tenant: @tenant_b, scheduled_time: time, status: "confirmed")
+    assert appt_b.valid?, "Slot should be available after clerk rejects a viewing"
+  end
+
   # TC-04: SchedulingService#available_slots returns correct open hours
   test "TC-04: available_slots excludes booked hours" do
     date = 5.days.from_now.to_date
     Appointment.create!(
       unit: @unit, tenant: @tenant_a,
-      scheduled_time: date.to_datetime.change(hour: 10),
+      scheduled_time: appointment_time_on(date, 10),
       status: "confirmed"
     )
     slots = SchedulingService.new.available_slots(@unit.id, date)

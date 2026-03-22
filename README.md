@@ -125,9 +125,8 @@ bundle exec rails test
 **Expected output:**
 
 ```
-200 runs, 375 assertions, 0 failures, 0 errors, 0 skips
-Line Coverage: 98.72% (618/626 lines)
-```
+240 runs, 476 assertions, 0 failures, 0 errors, 0 skips 
+Line Coverage: 98.01% (738 / 753)
 
 A full HTML coverage report is saved to `backend/coverage/index.html` — open it in any browser.
 
@@ -178,7 +177,7 @@ npm test -- --run src/pages/tenant/MyInvoices.test.jsx
 | TC-05 | `services/notification_service_test.rb` | Upcoming reminder, confirmed-only filter, cancelled appointment exclusion |
 | TC-06 | `controllers/applications_controller_test.rb` | Submit, approve, reject, status filter, role guards, TC-22 cancel |
 | TC-07 | `services/billing_service_test.rb` | Quarterly cycle: skips months 2 & 3, generates on month 4 |
-| TC-08 | `services/billing_service_test.rb` | Discount line item present for 2-lease tenant (5% tier) |
+| TC-08 | `services/billing_service_test.rb` | Discount line item present for 2-lease tenant (10% tier) |
 | TC-09 | `services/billing_service_test.rb` | Re-running billing does not duplicate invoice for same period |
 | TC-10 | `models/unit_test.rb` | `mark_as_occupied!`, `mark_as_available!`, unit scopes |
 | TC-11 | `services/utility_service_test.rb` | Utility charge breakdown (electricity/water/waste), idempotency |
@@ -355,4 +354,4 @@ Get your token from `POST /auth/login` or `POST /auth/register`.
 |---|---|---|
 | **Email delivery** | `NotificationService` logs all events to `Rails.logger`. Real SMTP via ActionMailer was deferred to keep the service decoupled and testable without an email server. | Replace log calls with `UserMailer` + ActionMailer in a future PR |
 | **Utility consumption** | `UtilityService#simulate_consumption` generates deterministic values. Real IoT/meter integration was out of scope. | Integrate real meter API in a future iteration |
-| **Performance tests PT-02/04/05** | JMeter plan design notes are in `perf/PT-02-05-notes.md`. Full JMeter execution requires a running server and is manual. | Execute against staging environment with JMeter |
+| **Performance tests PT-02/04/05** | JMeter plans live in `perf/*.jmx`; runbook is `perf/README.md`. Requires Java, JMeter, and Rails running (e.g. localhost:3000). | Run `jmeter -n -t perf/<plan>.jmx` or open plans in JMeter GUI |

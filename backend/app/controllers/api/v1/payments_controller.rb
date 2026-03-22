@@ -12,6 +12,10 @@ class Api::V1::PaymentsController < Api::V1::BaseController
       return render json: { error: "Invoice is already fully paid" }, status: :unprocessable_entity
     end
 
+    if amount > invoice.remaining_balance
+      return render json: { error: "Payment amount cannot exceed remaining balance" }, status: :unprocessable_entity
+    end
+
     ActiveRecord::Base.transaction do
       tenant_id = current_user.tenant? ? current_user.tenant.id : invoice.tenant_id
 

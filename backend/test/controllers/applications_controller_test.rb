@@ -9,6 +9,9 @@ class ApplicationsControllerTest < ActionDispatch::IntegrationTest
     @clerk_user  = create(:user, :clerk)
     @clerk_token = JwtService.encode(user_id: @clerk_user.id, role: "clerk")
 
+    @admin_user  = create(:user, :admin)
+    @admin_token = JwtService.encode(user_id: @admin_user.id, role: "admin")
+
     @property = create(:property)
     @unit     = create(:unit, property: @property, status: "available")
   end
@@ -59,7 +62,21 @@ class ApplicationsControllerTest < ActionDispatch::IntegrationTest
     assert_response :forbidden
   end
 
-  test "clerk can approve an application" do
+  test "admin can approve an application" do
+    app = create(:application, tenant: @tenant, unit: @unit, status: "pending")
+
+    patch "/api/v1/applications/#{app.id}/approve",
+          params: { start_date: Date.today, end_date: 1.year.from_now.to_date,
+                    rent_amount: 2500, payment_cycle: "monthly" },
+          headers: { "Authorization" => "Bearer #{@admin_token}" }, as: :json
+
+    assert_response :ok
+    body = JSON.parse(response.body)
+    assert_equal "approved", body["application"]["status"]
+    assert_equal "active", body["lease"]["status"]
+  end
+
+  test "clerk cannot approve an application" do
     app = create(:application, tenant: @tenant, unit: @unit, status: "pending")
 
     patch "/api/v1/applications/#{app.id}/approve",
@@ -67,10 +84,7 @@ class ApplicationsControllerTest < ActionDispatch::IntegrationTest
                     rent_amount: 2500, payment_cycle: "monthly" },
           headers: { "Authorization" => "Bearer #{@clerk_token}" }, as: :json
 
-    assert_response :ok
-    body = JSON.parse(response.body)
-    assert_equal "approved", body["application"]["status"]
-    assert_equal "active", body["lease"]["status"]
+    assert_response :forbidden
   end
 
   test "approving an already-processed application returns 422" do
@@ -79,7 +93,7 @@ class ApplicationsControllerTest < ActionDispatch::IntegrationTest
     patch "/api/v1/applications/#{app.id}/approve",
           params: { start_date: Date.today, end_date: 1.year.from_now.to_date,
                     rent_amount: 2500, payment_cycle: "monthly" },
-          headers: { "Authorization" => "Bearer #{@clerk_token}" }, as: :json
+          headers: { "Authorization" => "Bearer #{@admin_token}" }, as: :json
 
     assert_response :unprocessable_entity
   end
@@ -127,14 +141,24 @@ class ApplicationsControllerTest < ActionDispatch::IntegrationTest
     assert_response :forbidden
   end
 
-  test "clerk can reject an application" do
+  test "admin can reject an application" do
+    app = create(:application, tenant: @tenant, unit: @unit, status: "pending")
+
+    patch "/api/v1/applications/#{app.id}/reject",
+          params: { reason: "Incomplete documents" },
+          headers: { "Authorization" => "Bearer #{@admin_token}" }, as: :json
+
+    assert_response :ok
+    assert_equal "rejected", JSON.parse(response.body)["status"]
+  end
+
+  test "clerk cannot reject an application" do
     app = create(:application, tenant: @tenant, unit: @unit, status: "pending")
 
     patch "/api/v1/applications/#{app.id}/reject",
           params: { reason: "Incomplete documents" },
           headers: { "Authorization" => "Bearer #{@clerk_token}" }, as: :json
 
-    assert_response :ok
-    assert_equal "rejected", JSON.parse(response.body)["status"]
+    assert_response :forbidden
   end
 end

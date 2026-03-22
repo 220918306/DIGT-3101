@@ -4,6 +4,7 @@ class Tenant < ApplicationRecord
   has_many :appointments, dependent: :destroy
   has_many :applications, dependent: :destroy
   has_many :leases, dependent: :destroy
+  has_many :letters, dependent: :destroy
   has_many :invoices, dependent: :destroy
   has_many :payments, dependent: :destroy
   has_many :maintenance_tickets, dependent: :destroy

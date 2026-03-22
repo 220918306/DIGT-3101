@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
 import { getInvoices } from "../../api/invoices";
 import { getLeases } from "../../api/leases";
 import { getTickets } from "../../api/maintenance";
@@ -23,7 +22,6 @@ function StatCard({ label, value, color, icon }) {
 }
 
 export default function TenantDashboard() {
-  const { user } = useAuth();
   const [invoices, setInvoices] = useState([]);
   const [leases, setLeases]     = useState([]);
   const [tickets, setTickets]   = useState([]);
@@ -51,7 +49,7 @@ export default function TenantDashboard() {
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Welcome back, {user?.name} 👋</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Welcome</h1>
           <p className="text-gray-500 mt-1">Here&apos;s your tenant overview</p>
         </div>
 

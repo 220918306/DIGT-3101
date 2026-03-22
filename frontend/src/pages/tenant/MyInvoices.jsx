@@ -1,31 +1,50 @@
 import { useState, useEffect } from "react";
 import { getInvoices, getInvoice } from "../../api/invoices";
 import { createPayment } from "../../api/payments";
+import { getLeases } from "../../api/leases";
+import { getLetters, signLetter } from "../../api/letters";
 import Navbar from "../../components/Navbar";
 import StatusBadge from "../../components/shared/StatusBadge";
 import LoadingSpinner from "../../components/shared/LoadingSpinner";
 
 export default function MyInvoices() {
+  const [leases, setLeases]       = useState([]);
   const [invoices, setInvoices]   = useState([]);
   const [selected, setSelected]   = useState(null);
+  const [selectedLetter, setSelectedLetter] = useState(null);
+  const [letters, setLetters]     = useState([]);
   const [payAmount, setPayAmount] = useState("");
   const [payMethod, setPayMethod] = useState("online");
+  const [payError, setPayError]   = useState("");
   const [loading, setLoading]     = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage]     = useState("");
 
   const load = () => {
     setLoading(true);
-    getInvoices().then((r) => setInvoices(r.data)).finally(() => setLoading(false));
+    Promise.all([getLeases(), getInvoices(), getLetters()])
+      .then(([lea, inv, letRes]) => {
+        setLeases(lea.data || []);
+        setInvoices(inv.data || []);
+        setLetters(letRes.data || []);
+      })
+      .finally(() => setLoading(false));
   };
   useEffect(() => { load(); }, []);
 
   const handleViewDetail = (inv) => {
+    setPayAmount("");
+    setPayError("");
     getInvoice(inv.id).then((r) => setSelected(r.data));
   };
 
   const handlePay = async () => {
     if (!payAmount || parseFloat(payAmount) <= 0) return;
+    if (parseFloat(payAmount) > parseFloat(selected.remaining || 0)) {
+      setPayError("Payment amount cannot exceed remaining balance.");
+      return;
+    }
+    setPayError("");
     setSubmitting(true);
     try {
       const res = await createPayment({
@@ -37,17 +56,43 @@ export default function MyInvoices() {
       setSelected(null);
       load();
     } catch (err) {
-      setMessage(err.response?.data?.error || "Payment failed.");
+      setPayError(err.response?.data?.error || "Payment failed.");
     } finally {
       setSubmitting(false);
     }
   };
 
+  const handleSignAgreement = async () => {
+    if (!selectedLetter) return;
+    setSubmitting(true);
+    try {
+      await signLetter(selectedLetter.id);
+      setMessage("Lease agreement signed.");
+      setSelectedLetter(null);
+      load();
+    } catch (err) {
+      setMessage(err.response?.data?.error || "Could not sign lease agreement.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const pendingLetterForLease = (leaseId) => letters.find((l) => l.lease_id === leaseId && l.status === "sent");
+
+  const remaining = parseFloat(selected?.remaining || 0);
+  const enteredAmount = parseFloat(payAmount || 0);
+  const isPayInvalid =
+    !selected ||
+    !payAmount ||
+    Number.isNaN(enteredAmount) ||
+    enteredAmount <= 0 ||
+    enteredAmount > remaining;
+
   return (
     <>
       <Navbar />
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">My Invoices</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">My Leases</h1>
 
         {message && (
           <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm flex justify-between">
@@ -57,7 +102,61 @@ export default function MyInvoices() {
         )}
 
         {loading ? <LoadingSpinner /> : (
+          <>
+          <div className="card mb-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">My Leases</h2>
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[980px]">
+              <thead className="border-b border-gray-200">
+                <tr>
+                  <th className="table-header text-left">Lease</th>
+                  <th className="table-header text-left">Unit</th>
+                  <th className="table-header text-left">Start</th>
+                  <th className="table-header text-left">End</th>
+                  <th className="table-header text-left">Cycle</th>
+                  <th className="table-header text-right">Rent</th>
+                  <th className="table-header text-center">Agreement Signed</th>
+                  <th className="table-header text-center">Status</th>
+                  <th className="table-header"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {leases.length === 0 ? (
+                  <tr><td colSpan={9} className="py-12 text-center text-gray-500">No leases found</td></tr>
+                ) : leases.map((lease) => {
+                  const pendingLetter = pendingLetterForLease(lease.id);
+                  return (
+                    <tr key={lease.id} className="hover:bg-gray-50">
+                      <td className="table-cell font-medium">#{lease.id}</td>
+                      <td className="table-cell">{lease.unit_number || `Unit #${lease.unit_id}`}</td>
+                      <td className="table-cell">{lease.start_date}</td>
+                      <td className="table-cell">{lease.end_date}</td>
+                      <td className="table-cell capitalize">{lease.payment_cycle}</td>
+                      <td className="table-cell text-right">${parseFloat(lease.rent_amount || 0).toFixed(2)}</td>
+                      <td className="table-cell text-center">{lease.agreement_signed ? "Yes" : "No"}</td>
+                      <td className="table-cell text-center"><StatusBadge status={lease.status} /></td>
+                      <td className="table-cell">
+                        {pendingLetter ? (
+                          <button
+                            className="text-blue-600 hover:underline text-sm"
+                            onClick={() => setSelectedLetter(pendingLetter)}
+                          >
+                            Sign Agreement
+                          </button>
+                        ) : (
+                          <span className="text-xs text-gray-400">No pending agreement</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            </div>
+          </div>
+
           <div className="card">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Billing Invoices</h2>
             <table className="w-full">
               <thead className="border-b border-gray-200">
                 <tr>
@@ -93,6 +192,7 @@ export default function MyInvoices() {
               </tbody>
             </table>
           </div>
+          </>
         )}
 
         {/* Invoice Detail / Pay Modal */}
@@ -143,8 +243,29 @@ export default function MyInvoices() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="form-label">Payment Amount</label>
-                      <input type="number" className="form-input" placeholder={selected.remaining}
-                        value={payAmount} onChange={(e) => setPayAmount(e.target.value)} />
+                      <input
+                        type="number"
+                        className={`form-input ${payAmount && isPayInvalid ? "border-red-500 focus:border-red-500 focus:ring-red-500" : ""}`}
+                        placeholder={selected.remaining}
+                        min="0.01"
+                        max={selected.remaining}
+                        step="0.01"
+                        value={payAmount}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setPayAmount(value);
+                          const next = parseFloat(value || 0);
+                          if (!value) {
+                            setPayError("");
+                          } else if (Number.isNaN(next) || next <= 0) {
+                            setPayError("Payment amount must be greater than zero.");
+                          } else if (next > remaining) {
+                            setPayError("Payment amount cannot exceed remaining balance.");
+                          } else {
+                            setPayError("");
+                          }
+                        }}
+                      />
                     </div>
                     <div>
                       <label className="form-label">Payment Method</label>
@@ -156,14 +277,39 @@ export default function MyInvoices() {
                       </select>
                     </div>
                   </div>
+                  {payError && (
+                    <p className="text-sm text-red-600 font-medium">{payError}</p>
+                  )}
                 </div>
               )}
 
               <div className="flex gap-2 mt-4">
                 <button className="btn-secondary flex-1" onClick={() => setSelected(null)}>Close</button>
                 {selected.status !== "paid" && (
-                  <button className="btn-success flex-1" onClick={handlePay} disabled={submitting}>
+                  <button className="btn-success flex-1" onClick={handlePay} disabled={submitting || isPayInvalid}>
                     {submitting ? "Processing..." : "Confirm Payment"}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {selectedLetter && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-2xl shadow-2xl">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">{selectedLetter.subject}</h3>
+                <StatusBadge status={selectedLetter.status} />
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4 max-h-80 overflow-y-auto whitespace-pre-line text-sm text-gray-700">
+                {selectedLetter.body}
+              </div>
+              <div className="flex gap-2 mt-4">
+                <button className="btn-secondary flex-1" onClick={() => setSelectedLetter(null)}>Close</button>
+                {selectedLetter.status !== "signed" && (
+                  <button className="btn-success flex-1" onClick={handleSignAgreement} disabled={submitting}>
+                    {submitting ? "Signing..." : "Agree & Sign"}
                   </button>
                 )}
               </div>

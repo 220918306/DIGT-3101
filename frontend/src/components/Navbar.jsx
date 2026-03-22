@@ -5,17 +5,23 @@ const ROLE_LINKS = {
   tenant: [
     { to: "/tenant",              label: "Dashboard"    },
     { to: "/tenant/units",        label: "Find Units"   },
-    { to: "/tenant/invoices",     label: "My Invoices"  },
+    { to: "/tenant/leases",       label: "My Leases"    },
+    { to: "/tenant/letters",      label: "Letters"      },
     { to: "/tenant/maintenance",  label: "Maintenance"  },
   ],
   clerk: [
     { to: "/clerk",               label: "Dashboard"    },
-    { to: "/clerk/applications",  label: "Applications" },
+    { to: "/clerk/tenants",       label: "Tenants"      },
+    { to: "/clerk/units",         label: "Units"        },
     { to: "/clerk/invoices",      label: "Invoices"     },
     { to: "/clerk/maintenance",   label: "Maintenance"  },
   ],
   admin: [
     { to: "/admin",               label: "Dashboard"    },
+    { to: "/clerk/tenants",       label: "Tenants"      },
+    { to: "/clerk/units",         label: "Units"        },
+    { to: "/clerk/invoices",      label: "Invoices"     },
+    { to: "/clerk/maintenance",   label: "Maintenance"  },
     { to: "/admin/reports",       label: "Reports"      },
   ],
 };

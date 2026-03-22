@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
 import { getOccupancyReport, getRevenueReport, getMaintenanceReport } from "../../api/reports";
 import Navbar from "../../components/Navbar";
 import LoadingSpinner from "../../components/shared/LoadingSpinner";
@@ -21,7 +20,6 @@ function MetricCard({ label, value, sub, color, icon }) {
 }
 
 export default function AdminDashboard() {
-  const { user } = useAuth();
   const [occupancy, setOccupancy]     = useState(null);
   const [revenue, setRevenue]         = useState(null);
   const [maintenance, setMaintenance] = useState(null);
@@ -45,7 +43,7 @@ export default function AdminDashboard() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-          <p className="text-gray-500 mt-1">Welcome, {user?.name} — system overview</p>
+          <p className="text-gray-500 mt-1">System overview</p>
         </div>
 
         <h2 className="text-lg font-semibold text-gray-700 mb-3">Occupancy</h2>

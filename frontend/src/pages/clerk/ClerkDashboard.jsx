@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
 import { getApplications } from "../../api/applications";
 import { getTickets } from "../../api/maintenance";
 import { getInvoices } from "../../api/invoices";
@@ -23,7 +22,6 @@ function StatCard({ label, value, color, icon, to }) {
 }
 
 export default function ClerkDashboard() {
-  const { user } = useAuth();
   const [stats, setStats] = useState({ pending: 0, openTickets: 0, overdueInvoices: 0, emergencies: 0 });
   const [loading, setLoading] = useState(true);
 
@@ -50,7 +48,7 @@ export default function ClerkDashboard() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-gray-900">Clerk Dashboard</h1>
-          <p className="text-gray-500 mt-1">Welcome, {user?.name} — here&apos;s what needs your attention</p>
+          <p className="text-gray-500 mt-1">Here&apos;s what needs your attention</p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -60,9 +58,10 @@ export default function ClerkDashboard() {
           <StatCard label="Active Emergencies"    value={stats.emergencies}    color="border-red-700"    icon="🚨" to="/clerk/maintenance" />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {[
-            { to: "/clerk/applications", icon: "📋", label: "Review Applications", desc: "Approve or reject lease applications", color: "bg-yellow-50 border-yellow-200" },
+            { to: "/clerk/tenants",      icon: "📋", label: "Manage Tenants",      desc: "Applications and active leases", color: "bg-yellow-50 border-yellow-200" },
+            { to: "/clerk/units",        icon: "🏬", label: "Manage Units",         desc: "Update unit details and availability", color: "bg-purple-50 border-purple-200" },
             { to: "/clerk/maintenance",  icon: "🔧", label: "Manage Tickets",       desc: "Update status and assign technicians", color: "bg-blue-50 border-blue-200" },
             { to: "/clerk/invoices",     icon: "📄", label: "Invoice Management",   desc: "Generate and track invoices", color: "bg-green-50 border-green-200" },
           ].map((item) => (

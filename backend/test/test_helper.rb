@@ -28,6 +28,12 @@ end
 class ActiveSupport::TestCase
   include FactoryBot::Syntax::Methods
 
+  # Appointment validation uses Time.zone (America/Toronto). Date#to_datetime.change(hour:)
+  # builds UTC-ish values that can fall outside 9–17 local and flake; use this instead.
+  def appointment_time_on(date, hour)
+    Time.zone.local(date.year, date.month, date.day, hour, 0, 0)
+  end
+
   # DatabaseCleaner setup
   setup    { DatabaseCleaner.start }
   teardown { DatabaseCleaner.clean }

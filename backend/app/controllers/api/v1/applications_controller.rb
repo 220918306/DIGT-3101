@@ -2,12 +2,11 @@ class Api::V1::ApplicationsController < Api::V1::BaseController
   # GET /api/v1/applications — FR-04/FR-05: List applications
   def index
     apps = if current_user.tenant?
-             Application.includes(:unit).where(tenant_id: current_user.tenant.id)
-           else
-             scope = Application.includes(:tenant, :unit)
-             scope = scope.where(status: params[:status]) if params[:status].present?
-             scope
-           end
+      Application.includes(:unit).where(tenant_id: current_user.tenant.id)
+    else
+      Application.includes(:tenant, :unit)
+    end
+    apps = apps.where(status: params[:status]) if params[:status].present?
     render json: apps.map { |a| application_json(a) }
   end
 
@@ -28,7 +27,7 @@ class Api::V1::ApplicationsController < Api::V1::BaseController
 
   # PATCH /api/v1/applications/:id/approve — FR-05: Clerk approves application
   def approve
-    authorize_roles!("clerk", "admin")
+    authorize_roles!("admin")
     app = Application.find(params[:id])
 
     unless %w[pending under_review].include?(app.status)
@@ -58,7 +57,7 @@ class Api::V1::ApplicationsController < Api::V1::BaseController
 
   # PATCH /api/v1/applications/:id/reject — FR-05: Clerk rejects application
   def reject
-    authorize_roles!("clerk", "admin")
+    authorize_roles!("admin")
     app = Application.find(params[:id])
     app.update!(status: "rejected", rejection_reason: params[:reason],
                 reviewed_by_id: current_user.id)
@@ -68,7 +67,7 @@ class Api::V1::ApplicationsController < Api::V1::BaseController
   private
 
   def lease_params
-    params.permit(:start_date, :end_date, :rent_amount, :payment_cycle)
+    params.permit(:start_date, :end_date, :rent_amount, :payment_cycle, :auto_renew)
   end
 
   def application_json(a)
@@ -95,6 +94,7 @@ class Api::V1::ApplicationsController < Api::V1::BaseController
       end_date:     l.end_date,
       rent_amount:  l.rent_amount,
       payment_cycle: l.payment_cycle,
+      auto_renew:  l.auto_renew,
       status:       l.status
     }
   end

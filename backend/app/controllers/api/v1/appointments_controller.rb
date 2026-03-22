@@ -1,8 +1,14 @@
 class Api::V1::AppointmentsController < Api::V1::BaseController
   # GET /api/v1/appointments — FR-03: List tenant's appointments
   def index
-    tenant       = current_user.tenant
-    appointments = Appointment.includes(:unit).where(tenant_id: tenant.id).order(:scheduled_time)
+    appointments = if current_user.tenant?
+      Appointment.includes(:unit).where(tenant_id: current_user.tenant.id)
+    else
+      scope = Appointment.includes(:unit, tenant: :user)
+      scope = scope.where(status: params[:status]) if params[:status].present?
+      scope
+    end
+    appointments = appointments.order(:scheduled_time)
     render json: appointments.map { |a| appointment_json(a) }
   end
 
@@ -11,11 +17,16 @@ class Api::V1::AppointmentsController < Api::V1::BaseController
     authorize_roles!("tenant")
     tenant  = current_user.tenant
     service = SchedulingService.new
+    scheduled_time = DateTime.parse(params[:scheduled_time])
+
+    if scheduled_time < 24.hours.from_now
+      return render json: { error: "Viewing must be booked at least 24 hours in advance" }, status: :unprocessable_entity
+    end
 
     appointment = service.book_appointment(
       unit_id:        params[:unit_id],
       tenant_id:      tenant.id,
-      scheduled_time: DateTime.parse(params[:scheduled_time])
+      scheduled_time:
     )
     render json: appointment_json(appointment), status: :created
   rescue ConflictError => e
@@ -28,6 +39,16 @@ class Api::V1::AppointmentsController < Api::V1::BaseController
   # PATCH /api/v1/appointments/:id — FR-03: Reschedule appointment
   def update
     appointment = Appointment.find(params[:id])
+    if current_user.clerk? || current_user.admin?
+      status = params[:status].to_s
+      unless %w[confirmed rejected].include?(status)
+        return render json: { error: "Invalid status update" }, status: :unprocessable_entity
+      end
+
+      appointment.update!(status:)
+      return render json: appointment_json(appointment)
+    end
+
     authorize_tenant_owns!(appointment) && return
 
     appointment.update!(scheduled_time: DateTime.parse(params[:scheduled_time]))
@@ -40,6 +61,9 @@ class Api::V1::AppointmentsController < Api::V1::BaseController
   def destroy
     appointment = Appointment.find(params[:id])
     authorize_tenant_owns!(appointment) && return
+    unless appointment.status == "pending"
+      return render json: { error: "Only pending viewings can be cancelled" }, status: :unprocessable_entity
+    end
 
     appointment.update!(status: "cancelled")
     render json: { message: "Appointment cancelled successfully" }
@@ -54,7 +78,8 @@ class Api::V1::AppointmentsController < Api::V1::BaseController
       tenant_id:      a.tenant_id,
       scheduled_time: a.scheduled_time,
       status:         a.status,
-      unit_number:    a.unit&.unit_number
+      unit_number:    a.unit&.unit_number,
+      tenant_name:    a.tenant&.user&.name
     }
   end
 

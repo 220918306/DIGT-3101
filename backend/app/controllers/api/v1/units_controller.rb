@@ -19,6 +19,21 @@ class Api::V1::UnitsController < Api::V1::BaseController
     render json: unit_json(unit)
   end
 
+  # POST /api/v1/units — Staff creates a new unit record
+  def create
+    authorize_roles!("clerk", "admin")
+    unit = Unit.create!(unit_params)
+    render json: unit_json(unit), status: :created
+  end
+
+  # PATCH /api/v1/units/:id — Staff updates unit management details
+  def update
+    authorize_roles!("clerk", "admin")
+    unit = Unit.find(params[:id])
+    unit.update!(unit_params)
+    render json: unit_json(unit)
+  end
+
   # GET /api/v1/units/:id/available_slots — FR-03: Show open time slots
   def available_slots
     date  = Date.parse(params[:date])
@@ -30,9 +45,14 @@ class Api::V1::UnitsController < Api::V1::BaseController
 
   private
 
+  def unit_params
+    params.permit(:property_id, :unit_number, :size, :rental_rate, :tier, :purpose, :status, :available)
+  end
+
   def unit_json(u)
     {
       id:          u.id,
+      property_id: u.property_id,
       unit_number: u.unit_number,
       size:        u.size,
       rental_rate: u.rental_rate,

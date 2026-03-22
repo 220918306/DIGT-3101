@@ -2,7 +2,7 @@ class SchedulingService
   # FR-03: Check for time slot conflicts
   def check_conflict(unit_id, datetime)
     Appointment.where(unit_id: unit_id, scheduled_time: datetime)
-               .where.not(status: "cancelled")
+               .where.not(status: Appointment::NON_BLOCKING_STATUSES)
                .exists?
   end
 
@@ -17,9 +17,8 @@ class SchedulingService
         unit_id:        params[:unit_id],
         tenant_id:      params[:tenant_id],
         scheduled_time: params[:scheduled_time],
-        status:         "confirmed"
+        status:         "pending"
       )
-      NotificationService.new.send_booking_confirmation(appointment)
       appointment
     end
   end
@@ -27,10 +26,10 @@ class SchedulingService
   # FR-03: Return available hour slots for a unit on a given date
   def available_slots(unit_id, date)
     booked = Appointment.where(unit_id: unit_id)
-                        .where("DATE(scheduled_time) = ?", date)
-                        .where.not(status: "cancelled")
-                        .pluck(:scheduled_time)
-                        .map(&:hour)
+                         .where("DATE(scheduled_time) = ?", date)
+                         .where.not(status: Appointment::NON_BLOCKING_STATUSES)
+                         .pluck(:scheduled_time)
+                         .map(&:hour)
     (9..17).to_a - booked
   end
 end

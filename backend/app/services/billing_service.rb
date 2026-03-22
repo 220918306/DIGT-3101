@@ -1,6 +1,6 @@
 class BillingService
   # FR-16: Multi-store discount tiers
-  DISCOUNT_TIERS = { 2 => 5.0, 3 => 10.0 }.freeze
+  DISCOUNT_TIERS = { 2 => 10.0 }.freeze
 
   # FR-07: Automated monthly invoice generation (called by Sidekiq cron)
   def generate_monthly_invoices

@@ -2,9 +2,9 @@ class Api::V1::InvoicesController < Api::V1::BaseController
   # GET /api/v1/invoices — FR-07: List invoices
   def index
     invoices = if current_user.tenant?
-                 Invoice.where(tenant_id: current_user.tenant.id)
+                 Invoice.where(tenant_id: current_user.tenant.id).includes(:invoice_line_items)
                else
-                 Invoice.includes(:tenant, :lease)
+                 Invoice.includes(:tenant, :lease, :invoice_line_items)
                end
     invoices = invoices.where(status: params[:status]) if params[:status].present?
     invoices = invoices.order(created_at: :desc)
@@ -28,7 +28,81 @@ class Api::V1::InvoicesController < Api::V1::BaseController
     render json: { message: "Generated #{count} invoice(s) for active leases" }
   end
 
+  # PATCH /api/v1/invoices/:id/utilities — clerk/admin: set monthly utility line items (not damage invoices)
+  def utilities
+    authorize_roles!("clerk", "admin")
+    invoice = Invoice.includes(:invoice_line_items).find(params[:id])
+
+    if invoice.invoice_line_items.any?(&:damage?)
+      return render json: {
+        error: "Utility charges can only be edited on regular monthly invoices, not maintenance damage bills."
+      }, status: :unprocessable_entity
+    end
+
+    p = utilities_params.to_h.stringify_keys
+    unless %w[electricity water waste].all? { |k| p.key?(k) }
+      return render json: { error: "Provide electricity, water, and waste amounts." }, status: :bad_request
+    end
+
+    ActiveRecord::Base.transaction do
+      apply_utility_amount!(invoice, "electricity", "Electricity", p["electricity"])
+      apply_utility_amount!(invoice, "water", "Water", p["water"])
+      apply_utility_amount!(invoice, "waste", "Waste Management", p["waste"])
+
+      new_total = invoice.invoice_line_items.sum(:amount)
+      if invoice.amount_paid.to_d > new_total
+        invoice.errors.add(:base, "New total cannot be less than amount already paid ($#{invoice.amount_paid}).")
+        raise ActiveRecord::RecordInvalid.new(invoice)
+      end
+
+      invoice.amount = new_total
+      invoice.status = derive_status_after_total_change(invoice)
+      invoice.save!
+    end
+
+    invoice.reload
+    render json: invoice_json(invoice).merge(
+      line_items: invoice.invoice_line_items.map { |li| line_item_json(li) }
+    )
+  end
+
   private
+
+  def utilities_params
+    params.permit(:electricity, :water, :waste)
+  end
+
+  def apply_utility_amount!(invoice, item_type, label, raw)
+    amount = BigDecimal(raw.to_s)
+    if amount.negative?
+      invoice.errors.add(:base, "Amounts must be zero or greater")
+      raise ActiveRecord::RecordInvalid.new(invoice)
+    end
+
+    li = invoice.invoice_line_items.find { |i| i.item_type == item_type }
+    if li
+      li.update!(description: label, amount: amount)
+    else
+      invoice.invoice_line_items.create!(item_type: item_type, description: label, amount: amount)
+    end
+  end
+
+  def derive_status_after_total_change(invoice)
+    paid = invoice.amount_paid.to_d
+    total = invoice.amount.to_d
+    base = if paid >= total
+             "paid"
+           elsif paid.positive?
+             "partially_paid"
+           else
+             "unpaid"
+           end
+    if invoice.due_date < Date.today && base.in?(%w[unpaid partially_paid])
+      "overdue"
+    else
+      base
+    end
+  end
 
   def authorize_invoice_access!(invoice)
     return false if current_user.clerk? || current_user.admin?
@@ -39,6 +113,7 @@ class Api::V1::InvoicesController < Api::V1::BaseController
   end
 
   def invoice_json(i)
+    util = utility_amounts_from_line_items(i.invoice_line_items)
     {
       id:            i.id,
       lease_id:      i.lease_id,
@@ -49,8 +124,21 @@ class Api::V1::InvoicesController < Api::V1::BaseController
       status:        i.status,
       due_date:      i.due_date,
       billing_month: i.billing_month,
-      reminder_count: i.reminder_count
+      reminder_count: i.reminder_count,
+      utilities_editable: i.invoice_line_items.none?(&:damage?),
+      utility_electricity: util["electricity"],
+      utility_water:       util["water"],
+      utility_waste:       util["waste"]
     }
+  end
+
+  def utility_amounts_from_line_items(items)
+    base = { "electricity" => 0.0, "water" => 0.0, "waste" => 0.0 }
+    items.each do |li|
+      key = li.item_type.to_s
+      base[key] = li.amount.to_f if base.key?(key)
+    end
+    base
   end
 
   def line_item_json(li)

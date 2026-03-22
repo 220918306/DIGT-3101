@@ -6,6 +6,9 @@ class AppointmentsControllerTest < ActionDispatch::IntegrationTest
     @tenant      = create(:tenant, user: @tenant_user)
     @tenant_token = JwtService.encode(user_id: @tenant_user.id, role: "tenant")
 
+    @clerk_user  = create(:user, :clerk)
+    @clerk_token = JwtService.encode(user_id: @clerk_user.id, role: "clerk")
+
     @property = create(:property)
     @unit     = create(:unit, property: @property, status: "available")
   end
@@ -17,6 +20,38 @@ class AppointmentsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :ok
     assert_equal 1, JSON.parse(response.body).size
+  end
+
+  test "clerk index returns appointments for all tenants with tenant_name" do
+    other = create(:tenant)
+    t1 = 3.days.from_now.change(hour: 10)
+    t2 = 4.days.from_now.change(hour: 11)
+    create(:appointment, tenant: @tenant, unit: @unit, scheduled_time: t1, status: "pending")
+    create(:appointment, tenant: other, unit: @unit, scheduled_time: t2, status: "confirmed")
+
+    get "/api/v1/appointments", headers: { "Authorization" => "Bearer #{@clerk_token}" }
+
+    assert_response :ok
+    body = JSON.parse(response.body)
+    assert_equal 2, body.size
+    assert body.all? { |a| a.key?("tenant_name") }
+    tenant_ids = body.map { |a| a["tenant_id"] }.uniq.sort
+    assert_equal [@tenant.id, other.id].sort, tenant_ids.sort
+  end
+
+  test "clerk index filters by status param" do
+    create(:appointment, tenant: @tenant, unit: @unit,
+           scheduled_time: 3.days.from_now.change(hour: 10), status: "pending")
+    create(:appointment, tenant: @tenant, unit: @unit,
+           scheduled_time: 4.days.from_now.change(hour: 11), status: "confirmed")
+
+    get "/api/v1/appointments", params: { status: "confirmed" },
+        headers: { "Authorization" => "Bearer #{@clerk_token}" }
+
+    assert_response :ok
+    rows = JSON.parse(response.body)
+    assert_equal 1, rows.size
+    assert_equal "confirmed", rows.first["status"]
   end
 
   test "tenant can book an appointment" do
@@ -73,7 +108,8 @@ class AppointmentsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "tenant can cancel own appointment" do
-    appt = create(:appointment, tenant: @tenant, unit: @unit, scheduled_time: 3.days.from_now.change(hour: 10))
+    appt = create(:appointment, tenant: @tenant, unit: @unit,
+                  scheduled_time: 3.days.from_now.change(hour: 10), status: "pending")
 
     delete "/api/v1/appointments/#{appt.id}",
            headers: { "Authorization" => "Bearer #{@tenant_token}" }
@@ -101,5 +137,32 @@ class AppointmentsControllerTest < ActionDispatch::IntegrationTest
            headers: { "Authorization" => "Bearer #{@tenant_token}" }
 
     assert_response :forbidden
+  end
+
+  test "clerk can reject a pending viewing" do
+    appt = create(:appointment, tenant: @tenant, unit: @unit,
+                  scheduled_time: 3.days.from_now.change(hour: 10), status: "pending")
+
+    patch "/api/v1/appointments/#{appt.id}",
+          params: { status: "rejected" },
+          headers: { "Authorization" => "Bearer #{@clerk_token}" }, as: :json
+
+    assert_response :ok
+    assert_equal "rejected", JSON.parse(response.body)["status"]
+    assert_equal "rejected", appt.reload.status
+  end
+
+  test "admin can reject a pending viewing" do
+    admin_user  = create(:user, :admin)
+    admin_token = JwtService.encode(user_id: admin_user.id, role: "admin")
+    appt = create(:appointment, tenant: @tenant, unit: @unit,
+                  scheduled_time: 3.days.from_now.change(hour: 15), status: "pending")
+
+    patch "/api/v1/appointments/#{appt.id}",
+          params: { status: "rejected" },
+          headers: { "Authorization" => "Bearer #{admin_token}" }, as: :json
+
+    assert_response :ok
+    assert_equal "rejected", appt.reload.status
   end
 end

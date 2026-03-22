@@ -2,7 +2,14 @@ class Appointment < ApplicationRecord
   belongs_to :unit
   belongs_to :tenant
 
-  enum :status, { pending: "pending", confirmed: "confirmed", cancelled: "cancelled" }
+  enum :status, {
+    pending:   "pending",
+    confirmed: "confirmed",
+    cancelled: "cancelled",
+    rejected:  "rejected"
+  }
+
+  NON_BLOCKING_STATUSES = %w[cancelled rejected].freeze
 
   validates :scheduled_time, presence: true
   validate :no_time_conflict
@@ -15,14 +22,14 @@ class Appointment < ApplicationRecord
 
     conflicts = Appointment.where(unit_id: unit_id, scheduled_time: scheduled_time)
                            .where.not(id: id)
-                           .where.not(status: "cancelled")
+                           .where.not(status: NON_BLOCKING_STATUSES)
     errors.add(:scheduled_time, "is already booked") if conflicts.exists?
   end
 
   def within_business_hours
     return unless scheduled_time
 
-    hour = scheduled_time.hour
+    hour = scheduled_time.in_time_zone.hour
     errors.add(:scheduled_time, "must be between 9 AM and 6 PM") unless hour.between?(9, 17)
   end
 end

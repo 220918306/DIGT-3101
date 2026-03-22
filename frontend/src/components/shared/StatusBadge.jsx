@@ -29,6 +29,9 @@ const STATUS_COLORS = {
   under_maintenance: "bg-yellow-100 text-yellow-800",
   // Appointment
   confirmed:       "bg-green-100 text-green-800",
+  // Letters
+  sent:            "bg-yellow-100 text-yellow-800",
+  signed:          "bg-green-100 text-green-800",
 };
 
 export default function StatusBadge({ status }) {

@@ -13,6 +13,7 @@ class LeaseFactory
         end_date:       params[:end_date],
         rent_amount:    params[:rent_amount],
         payment_cycle:  params[:payment_cycle] || "monthly",
+        auto_renew:     params[:auto_renew] || false,
         discount_rate:  discount_pct,
         status:         "active"
       )

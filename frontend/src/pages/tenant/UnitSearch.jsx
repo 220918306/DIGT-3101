@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { getUnits, getAvailableSlots } from "../../api/units";
-import { createAppointment } from "../../api/appointments";
-import { createApplication } from "../../api/applications";
+import { getAppointments, createAppointment, cancelAppointment } from "../../api/appointments";
+import { getApplications, createApplication, withdrawApplication } from "../../api/applications";
 import Navbar from "../../components/Navbar";
 import StatusBadge from "../../components/shared/StatusBadge";
 import LoadingSpinner from "../../components/shared/LoadingSpinner";
@@ -55,6 +55,30 @@ export default function UnitSearch() {
   const [applyData, setApplyData] = useState({ employment_info: "", business_type: "" });
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage]   = useState("");
+  const [appointments, setAppointments] = useState([]);
+  const [applications, setApplications] = useState([]);
+  const earliestBooking = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const firstBookableDate = (() => {
+    const date = new Date(
+      earliestBooking.getFullYear(),
+      earliestBooking.getMonth(),
+      earliestBooking.getDate(),
+      0, 0, 0, 0
+    );
+    while (true) {
+      // Business slots are 9:00-17:00 (inclusive)
+      const latestBusinessSlot = new Date(
+        date.getFullYear(),
+        date.getMonth(),
+        date.getDate(),
+        17, 0, 0, 0
+      );
+      if (latestBusinessSlot.getTime() >= earliestBooking.getTime()) break;
+      date.setDate(date.getDate() + 1);
+    }
+    return date;
+  })();
+  const minBookingDate = `${firstBookableDate.getFullYear()}-${String(firstBookableDate.getMonth() + 1).padStart(2, "0")}-${String(firstBookableDate.getDate()).padStart(2, "0")}`;
 
   const fetchUnits = () => {
     setLoading(true);
@@ -63,7 +87,19 @@ export default function UnitSearch() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { fetchUnits(); }, []); // eslint-disable-line
+  const fetchAppointments = () => {
+    getAppointments()
+      .then((r) => setAppointments(r.data || []))
+      .catch(() => setAppointments([]));
+  };
+
+  const fetchApplications = () => {
+    getApplications()
+      .then((r) => setApplications(r.data || []))
+      .catch(() => setApplications([]));
+  };
+
+  useEffect(() => { fetchUnits(); fetchAppointments(); fetchApplications(); }, []); // eslint-disable-line
 
   const handleBook = async (unit) => {
     setSelectedUnit(unit);
@@ -75,17 +111,30 @@ export default function UnitSearch() {
   const handleLoadSlots = async () => {
     if (!bookDate) return;
     const r = await getAvailableSlots(selectedUnit.id, bookDate);
-    setSlots(r.data.available_slots || []);
+    const [year, month, day] = bookDate.split("-").map(Number);
+    let availableSlots = r.data.available_slots || [];
+    availableSlots = availableSlots.filter((h) => {
+      const slotDate = new Date(year, month - 1, day, Number(h), 0, 0);
+      return slotDate.getTime() >= earliestBooking.getTime();
+    });
+    setSlots(availableSlots);
   };
 
   const handleConfirmBook = async () => {
     if (!bookDate || !bookHour) return;
     setSubmitting(true);
     try {
-      const dt = `${bookDate}T${String(bookHour).padStart(2, "0")}:00:00`;
+      const [year, month, day] = bookDate.split("-").map(Number);
+      const localDateTime = new Date(year, month - 1, day, Number(bookHour), 0, 0);
+      if (localDateTime.getTime() < earliestBooking.getTime()) {
+        setMessage("Viewing must be booked at least 24 hours in advance.");
+        return;
+      }
+      const dt = localDateTime.toISOString();
       await createAppointment({ unit_id: selectedUnit.id, scheduled_time: dt });
-      setMessage("Appointment booked successfully!");
+      setMessage("Viewing request submitted. Status: Pending.");
       setModal(null);
+      fetchAppointments();
     } catch (err) {
       setMessage(err.response?.data?.error || "Booking failed.");
     } finally {
@@ -109,12 +158,44 @@ export default function UnitSearch() {
       });
       setMessage("Application submitted! A clerk will review it shortly.");
       setModal(null);
+      fetchApplications();
     } catch (err) {
       setMessage(err.response?.data?.errors?.join(", ") || "Application failed.");
     } finally {
       setSubmitting(false);
     }
   };
+
+  const handleCancelViewing = async (id) => {
+    setSubmitting(true);
+    try {
+      await cancelAppointment(id);
+      setMessage("Viewing cancelled.");
+      fetchAppointments();
+    } catch (err) {
+      setMessage(err.response?.data?.error || "Could not cancel.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleWithdrawApplication = async (id) => {
+    setSubmitting(true);
+    try {
+      await withdrawApplication(id);
+      setMessage("Application withdrawn.");
+      fetchApplications();
+    } catch (err) {
+      setMessage(err.response?.data?.error || "Could not withdraw application.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const submittedViewings = appointments
+    .filter((a) => a.status !== "cancelled")
+    .sort((a, b) => new Date(b.scheduled_time) - new Date(a.scheduled_time));
+  const submittedApplications = [...applications].sort((a, b) => b.id - a.id);
 
   return (
     <>
@@ -188,7 +269,7 @@ export default function UnitSearch() {
                 <div>
                   <label className="form-label">Select Date</label>
                   <input type="date" className="form-input" value={bookDate}
-                    min={new Date().toISOString().split("T")[0]}
+                    min={minBookingDate}
                     onChange={(e) => setBookDate(e.target.value)} />
                 </div>
                 <button className="btn-secondary w-full text-sm" onClick={handleLoadSlots}>Check Available Times</button>
@@ -247,6 +328,87 @@ export default function UnitSearch() {
             </div>
           </div>
         )}
+
+        {/* My Viewings */}
+        <section className="mt-12 pt-8 border-t border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">My Viewings</h2>
+          {submittedViewings.length === 0 ? (
+            <p className="text-sm text-gray-500">No viewing requests yet. Book one above.</p>
+          ) : (
+            <div className="space-y-2">
+              {submittedViewings.map((apt) => (
+                <div key={apt.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div>
+                      <span className="font-medium">Unit {apt.unit_number}</span>
+                      <span className="text-gray-500 text-sm ml-2">
+                        {new Date(apt.scheduled_time).toLocaleString(undefined, {
+                          weekday: "short",
+                          month: "short",
+                          day: "numeric",
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    </div>
+                    <StatusBadge status={apt.status} />
+                  </div>
+                  {apt.status === "pending" ? (
+                    <button
+                      onClick={() => handleCancelViewing(apt.id)}
+                      disabled={submitting}
+                      className="text-sm text-red-600 hover:text-red-700 font-medium disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  ) : (
+                    <span className="text-xs text-gray-400">No action</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* My Applications */}
+        <section className="mt-8 pt-8 border-t border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">My Applications</h2>
+          {submittedApplications.length === 0 ? (
+            <p className="text-sm text-gray-500">No submitted applications yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {submittedApplications.map((app) => (
+                <div key={app.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div>
+                      <p className="font-medium">
+                        Unit {app.unit_number || `#${app.unit_id}`}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        Submitted {app.application_date}
+                      </p>
+                      {app.rejection_reason && (
+                        <p className="text-xs text-red-600 mt-1">Reason: {app.rejection_reason}</p>
+                      )}
+                    </div>
+                    <StatusBadge status={app.status} />
+                  </div>
+                  {app.status === "pending" ? (
+                    <button
+                      onClick={() => handleWithdrawApplication(app.id)}
+                      disabled={submitting}
+                      className="text-sm text-red-600 hover:text-red-700 font-medium disabled:opacity-50"
+                    >
+                      Withdraw
+                    </button>
+                  ) : (
+                    <span className="text-xs text-gray-400">No action</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </>
   );

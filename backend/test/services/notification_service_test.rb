@@ -63,10 +63,10 @@ class NotificationServiceTest < ActiveSupport::TestCase
   test "TC-05b: send_upcoming_viewing_reminder sends for all next-day confirmed appointments" do
     tomorrow = 1.day.from_now.to_date
     appt1 = create(:appointment, tenant: @tenant, unit: @unit,
-                    scheduled_time: tomorrow.to_datetime.change(hour: 10), status: "confirmed")
+                    scheduled_time: appointment_time_on(tomorrow, 10), status: "confirmed")
     other_tenant = create(:tenant)
     appt2 = create(:appointment, tenant: other_tenant, unit: @unit,
-                    scheduled_time: tomorrow.to_datetime.change(hour: 14), status: "confirmed")
+                    scheduled_time: appointment_time_on(tomorrow, 14), status: "confirmed")
 
     upcoming = Appointment.where(status: "confirmed")
                           .where("DATE(scheduled_time) = ?", tomorrow)
@@ -77,7 +77,7 @@ class NotificationServiceTest < ActiveSupport::TestCase
   test "TC-05c: cancelled appointments are not selected for reminders" do
     tomorrow = 1.day.from_now.to_date
     create(:appointment, tenant: @tenant, unit: @unit,
-            scheduled_time: tomorrow.to_datetime.change(hour: 11), status: "cancelled")
+            scheduled_time: appointment_time_on(tomorrow, 11), status: "cancelled")
 
     upcoming = Appointment.where(status: "confirmed")
                           .where("DATE(scheduled_time) = ?", tomorrow)

@@ -22,6 +22,9 @@ module Backend
   class Application < Rails::Application
     config.load_defaults 7.2
 
+    # Business hours and scheduling should use the local business timezone.
+    config.time_zone = "America/Toronto"
+
     config.autoload_lib(ignore: %w[assets tasks])
 
     config.api_only = true

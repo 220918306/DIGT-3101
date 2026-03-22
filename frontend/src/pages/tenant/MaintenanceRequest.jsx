@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { getTickets, createTicket } from "../../api/maintenance";
+import { getLeases } from "../../api/leases";
 import Navbar from "../../components/Navbar";
 import StatusBadge from "../../components/shared/StatusBadge";
 import LoadingSpinner from "../../components/shared/LoadingSpinner";
@@ -12,14 +13,26 @@ const PRIORITY_INFO = {
 
 export default function MaintenanceRequest() {
   const [tickets, setTickets]   = useState([]);
-  const [form, setForm]         = useState({ description: "", priority: "routine" });
+  const [leases, setLeases]     = useState([]);
+  const [form, setForm]         = useState({ description: "", priority: "routine", lease_id: "" });
   const [loading, setLoading]   = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage]   = useState("");
   const [error, setError]       = useState("");
 
   const load = () => {
-    getTickets().then((r) => setTickets(r.data)).finally(() => setLoading(false));
+    setLoading(true);
+    Promise.all([getTickets(), getLeases({ status: "active" })])
+      .then(([ticketsRes, leasesRes]) => {
+        const activeLeases = leasesRes.data || [];
+        setTickets(ticketsRes.data || []);
+        setLeases(activeLeases);
+        // Auto-select if user has exactly one active lease.
+        if (activeLeases.length === 1) {
+          setForm((prev) => ({ ...prev, lease_id: String(activeLeases[0].id) }));
+        }
+      })
+      .finally(() => setLoading(false));
   };
   useEffect(() => { load(); }, []);
 
@@ -27,11 +40,17 @@ export default function MaintenanceRequest() {
     e.preventDefault();
     setError("");
     if (!form.description.trim()) { setError("Please describe the issue."); return; }
+    if (leases.length > 1 && !form.lease_id) {
+      setError("Please select which leased unit this request is for.");
+      return;
+    }
     setSubmitting(true);
     try {
-      await createTicket(form);
+      const payload = { description: form.description, priority: form.priority };
+      if (form.lease_id) payload.lease_id = Number(form.lease_id);
+      await createTicket(payload);
       setMessage("Maintenance request submitted! Our team will review it shortly.");
-      setForm({ description: "", priority: "routine" });
+      setForm((prev) => ({ ...prev, description: "", priority: "routine" }));
       load();
     } catch (err) {
       setError(err.response?.data?.error || "Submission failed. Do you have an active lease?");
@@ -58,6 +77,23 @@ export default function MaintenanceRequest() {
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Submit New Request</h2>
           {error && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>}
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="form-label">Leased Unit</label>
+              <select
+                className="form-select"
+                value={form.lease_id}
+                onChange={(e) => setForm({ ...form, lease_id: e.target.value })}
+                disabled={leases.length === 0 || leases.length === 1}
+                required={leases.length > 1}
+              >
+                {leases.length > 1 && <option value="">Select lease</option>}
+                {leases.map((lease) => (
+                  <option key={lease.id} value={lease.id}>
+                    Lease #{lease.id} - Unit {lease.unit_number || lease.unit_id}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div>
               <label className="form-label">Priority Level</label>
               <div className="grid grid-cols-3 gap-3">

@@ -1,17 +1,42 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+
+const REQUIRED_FIELDS = [
+  { key: "name", label: "Full name" },
+  { key: "email", label: "Email" },
+  { key: "password", label: "Password" },
+  { key: "company_name", label: "Company name" },
+];
 
 export default function Register() {
   const { register } = useAuth();
   const navigate     = useNavigate();
   const [form, setForm]     = useState({ name: "", email: "", password: "", phone: "", company_name: "" });
   const [errors, setErrors] = useState([]);
+  const [toast, setToast]   = useState(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!toast) return undefined;
+    const t = setTimeout(() => setToast(null), 6000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const missingRequiredLabels = () =>
+    REQUIRED_FIELDS.filter(({ key }) => {
+      const v = form[key];
+      return key === "password" ? !v : !String(v || "").trim();
+    }).map(({ label }) => label);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrors([]);
+    const missing = missingRequiredLabels();
+    if (missing.length > 0) {
+      setToast(`Please fill in: ${missing.join(", ")}`);
+      return;
+    }
     setLoading(true);
     try {
       await register(form);
@@ -33,7 +58,7 @@ export default function Register() {
         placeholder={placeholder}
         value={form[key]}
         onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-        required={["name", "email", "password"].includes(key)}
+        autoComplete={key === "password" ? "new-password" : key === "email" ? "email" : undefined}
       />
     </div>
   );
@@ -58,12 +83,12 @@ export default function Register() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {field("name",         "Full Name",      "text",     "Alice Smith")}
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+            {field("name",         "Full name",      "text",     "Alice Smith")}
             {field("email",        "Email",          "email",    "alice@example.com")}
             {field("password",     "Password",       "password", "At least 6 characters")}
-            {field("phone",        "Phone",          "tel",      "416-555-0100")}
-            {field("company_name", "Company Name",   "text",     "Alice's Boutique")}
+            {field("phone",        "Phone (optional)", "tel",      "416-555-0100")}
+            {field("company_name", "Company name",   "text",     "Alice's Boutique")}
 
             <button type="submit" className="btn-primary w-full py-2.5" disabled={loading}>
               {loading ? "Creating account..." : "Create Account"}
@@ -76,6 +101,23 @@ export default function Register() {
           </p>
         </div>
       </div>
+
+      {toast && (
+        <div
+          role="alert"
+          className="fixed bottom-6 left-1/2 z-[100] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-950 shadow-lg"
+        >
+          <span>{toast}</span>
+          <button
+            type="button"
+            onClick={() => setToast(null)}
+            className="ml-3 text-amber-800/70 hover:text-amber-950"
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   );
 }

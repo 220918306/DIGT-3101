@@ -4,6 +4,7 @@ class Lease < ApplicationRecord
   belongs_to :application, optional: true
 
   has_many :invoices, dependent: :destroy
+  has_many :letters, dependent: :destroy
   has_many :utility_consumptions, dependent: :destroy
   has_many :maintenance_tickets, dependent: :destroy
 

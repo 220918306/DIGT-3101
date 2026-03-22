@@ -66,16 +66,16 @@ class BillingServiceTest < ActiveSupport::TestCase
     assert_equal 1000,             invoice.remaining_balance
   end
 
-  # TC-27: 5% discount applied when tenant has 2 active leases
-  test "TC-27: applies 5% discount for tenants with 2 active leases" do
+  # TC-27: 10% discount applied when tenant has 2+ active leases (DISCOUNT_TIERS)
+  test "TC-27: applies 10% discount for tenants with 2 active leases" do
     unit2 = create(:unit, :occupied, property: @property)
     create(:lease, tenant: @tenant, unit: unit2, rent_amount: 2500)
 
     service = BillingService.new
-    assert_equal 5.0, service.discount_percentage(@tenant.id)
+    assert_equal 10.0, service.discount_percentage(@tenant.id)
   end
 
-  # TC-28: 10% discount applied when tenant has 3+ active leases
+  # TC-28: 10% discount still applies when tenant has 3+ active leases
   test "TC-28: applies 10% discount for tenants with 3+ active leases" do
     unit2 = create(:unit, :occupied, property: @property)
     unit3 = create(:unit, :occupied, property: @property)
@@ -91,7 +91,7 @@ class BillingServiceTest < ActiveSupport::TestCase
     create(:lease, tenant: @tenant, unit: unit2, rent_amount: 2500)
 
     service = BillingService.new
-    assert_equal 125.0, service.calculate_discount(@tenant.id)
+    assert_equal 250.0, service.calculate_discount(@tenant.id)
   end
 
   # TC-33: Quarterly payment cycle — invoice skipped for months 2 & 3, generated on month 4
@@ -186,9 +186,9 @@ class BillingServiceTest < ActiveSupport::TestCase
     end
   end
 
-  # TC-08: When tenant has 2 active leases (5% discount), the generated invoice
+  # TC-08: When tenant has 2 active leases (10% discount per DISCOUNT_TIERS), the generated invoice
   # includes a discount line item and the invoice total is reduced accordingly.
-  test "TC-08: invoice total reflects 5% discount for 2-lease tenant after regeneration" do
+  test "TC-08: invoice total reflects 10% discount for 2-lease tenant after regeneration" do
     unit2 = create(:unit, :occupied, property: @property)
     create(:lease, tenant: @tenant, unit: unit2, rent_amount: 2500)
 
@@ -198,9 +198,9 @@ class BillingServiceTest < ActiveSupport::TestCase
     discount_item = invoice.invoice_line_items.find_by(item_type: "discount")
     assert_not_nil discount_item, "discount line item should be present for 2-lease tenant"
     assert discount_item.amount.to_f < 0, "discount amount should be negative (reduction)"
-    expected_discount = (@lease.rent_amount * 0.05).round(2)
+    expected_discount = (@lease.rent_amount * 0.10).round(2)
     assert_in_delta expected_discount, discount_item.amount.to_f.abs, 1.0,
-                    "discount should be 5% of base rent for a 2-lease tenant"
+                    "discount should be 10% of base rent for a 2-lease tenant"
   end
 
   # TC-09: When invoice already exists for the period and is NOT replaced,

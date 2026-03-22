@@ -9,6 +9,9 @@ class LeasesControllerTest < ActionDispatch::IntegrationTest
     @clerk_user  = create(:user, :clerk)
     @clerk_token = JwtService.encode(user_id: @clerk_user.id, role: "clerk")
 
+    @admin_user  = create(:user, :admin)
+    @admin_token = JwtService.encode(user_id: @admin_user.id, role: "admin")
+
     @property = create(:property)
     @unit     = create(:unit, :occupied, property: @property)
     @lease    = create(:lease, tenant: @tenant, unit: @unit)
@@ -183,5 +186,122 @@ class LeasesControllerTest < ActionDispatch::IntegrationTest
          headers: { "Authorization" => "Bearer #{@tenant_token}" }, as: :json
 
     assert_response :forbidden
+  end
+
+  test "clerk can view any lease by id" do
+    get "/api/v1/leases/#{@lease.id}",
+        headers: { "Authorization" => "Bearer #{@clerk_token}" }
+
+    assert_response :ok
+    assert_equal @lease.id, JSON.parse(response.body)["id"]
+  end
+
+  test "lease show includes agreement_signed and agreement_status" do
+    get "/api/v1/leases/#{@lease.id}",
+        headers: { "Authorization" => "Bearer #{@tenant_token}" }
+
+    assert_response :ok
+    body = JSON.parse(response.body)
+    assert_equal false, body["agreement_signed"]
+    assert_equal "none", body["agreement_status"]
+  end
+
+  test "lease show reflects signed agreement letter" do
+    create(:letter, tenant: @tenant, lease: @lease, status: "signed", signed_at: Time.current)
+
+    get "/api/v1/leases/#{@lease.id}",
+        headers: { "Authorization" => "Bearer #{@tenant_token}" }
+
+    assert_response :ok
+    body = JSON.parse(response.body)
+    assert_equal true, body["agreement_signed"]
+    assert_equal "signed", body["agreement_status"]
+  end
+
+  test "admin can patch lease terms" do
+    new_end = @lease.end_date + 6.months
+
+    patch "/api/v1/leases/#{@lease.id}",
+          params: { end_date: new_end, auto_renew: true },
+          headers: { "Authorization" => "Bearer #{@admin_token}" }, as: :json
+
+    assert_response :ok
+    body = JSON.parse(response.body)
+    assert_equal new_end.to_s, body["end_date"].to_s
+    assert_equal true, body["auto_renew"]
+  end
+
+  test "clerk cannot patch lease" do
+    patch "/api/v1/leases/#{@lease.id}",
+          params: { end_date: @lease.end_date + 1.month },
+          headers: { "Authorization" => "Bearer #{@clerk_token}" }, as: :json
+
+    assert_response :forbidden
+  end
+
+  test "clerk can send lease agreement once" do
+    post "/api/v1/leases/#{@lease.id}/send_agreement",
+         headers: { "Authorization" => "Bearer #{@clerk_token}" }
+
+    assert_response :ok
+    body = JSON.parse(response.body)
+    assert_match(/sent/i, body["message"].to_s)
+    assert_equal @lease.id, body["lease_id"]
+    assert_equal 1, @lease.reload.letters.where(letter_type: "lease_agreement").count
+  end
+
+  test "send_agreement returns 422 when agreement already sent" do
+    post "/api/v1/leases/#{@lease.id}/send_agreement",
+         headers: { "Authorization" => "Bearer #{@clerk_token}" }
+    assert_response :ok
+
+    post "/api/v1/leases/#{@lease.id}/send_agreement",
+         headers: { "Authorization" => "Bearer #{@clerk_token}" }
+
+    assert_response :unprocessable_entity
+    assert_match(/awaiting signature/i, JSON.parse(response.body)["error"].to_s)
+  end
+
+  test "send_agreement returns 422 when agreement already signed" do
+    create(:letter, tenant: @tenant, lease: @lease, letter_type: "lease_agreement",
+                    status: "signed", signed_at: Time.current)
+
+    post "/api/v1/leases/#{@lease.id}/send_agreement",
+         headers: { "Authorization" => "Bearer #{@clerk_token}" }
+
+    assert_response :unprocessable_entity
+    assert_match(/already signed/i, JSON.parse(response.body)["error"].to_s)
+  end
+
+  test "renew without end_date computes default from lease length" do
+    start_d = Date.today - 200
+    end_d   = Date.today + 30
+    active  = create(:lease, tenant: @tenant, unit: @unit, status: "active",
+                     start_date: start_d, end_date: end_d)
+
+    post "/api/v1/leases/#{active.id}/renew",
+         params: {},
+         headers: { "Authorization" => "Bearer #{@clerk_token}" },
+         as: :json
+
+    assert_response :created
+    body = JSON.parse(response.body)
+    expected_end = end_d + (end_d - start_d) + 1.day
+    assert_equal expected_end.to_s, body["end_date"].to_s
+  end
+
+  test "renew accepts explicit rent_amount override" do
+    active = create(:lease, tenant: @tenant, unit: @unit, status: "active",
+                    start_date: 11.months.ago.to_date,
+                    end_date: 1.month.from_now.to_date,
+                    rent_amount: 2000)
+
+    post "/api/v1/leases/#{active.id}/renew",
+         params: { end_date: 13.months.from_now.to_date, rent_amount: 3200 },
+         headers: { "Authorization" => "Bearer #{@clerk_token}" },
+         as: :json
+
+    assert_response :created
+    assert_equal "3200.0", JSON.parse(response.body)["rent_amount"].to_s
   end
 end

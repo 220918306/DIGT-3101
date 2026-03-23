@@ -80,6 +80,32 @@ brew install postgresql@14
 brew services start postgresql@14
 ```
 
+### Install prerequisites (Windows)
+
+If any prerequisite is missing, use:
+
+1. Install Ruby 3.3.5 using [RubyInstaller for Windows](https://rubyinstaller.org/).
+2. Install Bundler:
+   ```powershell
+   gem install bundler
+   ```
+3. Install Node.js 20+ (LTS):
+   - Option A: install from [nodejs.org](https://nodejs.org/)
+   - Option B: use [nvm-windows](https://github.com/coreybutler/nvm-windows):
+     ```powershell
+     nvm install 20.19.0
+     nvm use 20.19.0
+     ```
+4. Install PostgreSQL 14+ from [postgresql.org](https://www.postgresql.org/download/windows/).
+5. Verify versions:
+   ```powershell
+   ruby --version
+   bundler --version
+   node --version
+   npm --version
+   psql --version
+   ```
+
 ---
 
 ## Quick Start

@@ -5,9 +5,13 @@ import { AuthProvider } from "../../context/AuthContext";
 import MyInvoices from "./MyInvoices";
 import * as invoicesApi from "../../api/invoices";
 import * as paymentsApi from "../../api/payments";
+import * as leasesApi from "../../api/leases";
+import * as lettersApi from "../../api/letters";
 
 vi.mock("../../api/invoices");
 vi.mock("../../api/payments");
+vi.mock("../../api/leases");
+vi.mock("../../api/letters");
 
 const mockInvoices = [
   { id: 1, billing_month: "2026-03-01", amount: "2500.00", amount_paid: "0.00",
@@ -38,13 +42,22 @@ function renderPage() {
 
 describe("TC-11: My Invoices page", () => {
   beforeEach(() => {
+    localStorage.setItem("rems_user", JSON.stringify({ role: "tenant", name: "Tenant User" }));
+    localStorage.setItem("rems_token", "test-token");
+    vi.spyOn(leasesApi, "getLeases").mockResolvedValue({ data: [] });
+    vi.spyOn(lettersApi, "getLetters").mockResolvedValue({ data: [] });
+    vi.spyOn(lettersApi, "signLetter").mockResolvedValue({ data: {} });
     vi.spyOn(invoicesApi, "getInvoices").mockResolvedValue({ data: mockInvoices });
+  });
+
+  afterEach(() => {
+    localStorage.clear();
   });
 
   test("renders page heading", async () => {
     renderPage();
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: /my invoices/i })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: /my leases/i })).toBeInTheDocument();
     });
   });
 

@@ -4,8 +4,12 @@ import { BrowserRouter } from "react-router-dom";
 import { AuthProvider } from "../../context/AuthContext";
 import ApplicationsList from "./ApplicationsList";
 import * as applicationsApi from "../../api/applications";
+import * as appointmentsApi from "../../api/appointments";
+import * as leasesApi from "../../api/leases";
 
 vi.mock("../../api/applications");
+vi.mock("../../api/appointments");
+vi.mock("../../api/leases");
 
 const mockApplications = [
   { id: 1, unit_id: 5, unit_number: "101", application_date: "2026-03-01",
@@ -26,16 +30,27 @@ function renderPage() {
 
 describe("TC-04/TC-25: Applications List page (clerk)", () => {
   beforeEach(() => {
+    localStorage.setItem("rems_user", JSON.stringify({ role: "admin", name: "Admin User" }));
+    localStorage.setItem("rems_token", "test-token");
     vi.spyOn(applicationsApi, "getApplications").mockResolvedValue({ data: mockApplications });
+    vi.spyOn(appointmentsApi, "getAppointments").mockResolvedValue({ data: [] });
+    vi.spyOn(appointmentsApi, "updateAppointment").mockResolvedValue({ data: {} });
+    vi.spyOn(leasesApi, "getLeases").mockResolvedValue({ data: [] });
+    vi.spyOn(leasesApi, "updateLease").mockResolvedValue({ data: {} });
+    vi.spyOn(leasesApi, "sendLeaseAgreement").mockResolvedValue({ data: {} });
+  });
+
+  afterEach(() => {
+    localStorage.clear();
   });
 
   test("renders heading and filter tabs", async () => {
     renderPage();
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: /lease applications/i })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: /tenants/i })).toBeInTheDocument();
     });
-    expect(screen.getByRole("button", { name: /^pending$/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^all$/i })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^pending$/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: /^all$/i }).length).toBeGreaterThan(0);
   });
 
   test("displays applications with unit number and status badge", async () => {
@@ -89,15 +104,10 @@ describe("TC-04/TC-25: Applications List page (clerk)", () => {
     });
   });
 
-  test("opens reject modal when Reject is clicked", async () => {
+  test("reject action is available for pending applications", async () => {
     renderPage();
     await waitFor(() => screen.getByRole("button", { name: /^reject$/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^reject$/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText(/reject application #1/i)).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /confirm rejection/i })).toBeInTheDocument();
-    });
+    expect(screen.getByRole("button", { name: /^reject$/i })).toBeInTheDocument();
   });
 
   test("shows success message after rejecting application", async () => {
@@ -108,9 +118,6 @@ describe("TC-04/TC-25: Applications List page (clerk)", () => {
     renderPage();
     await waitFor(() => screen.getByRole("button", { name: /^reject$/i }));
     fireEvent.click(screen.getByRole("button", { name: /^reject$/i }));
-
-    await waitFor(() => screen.getByRole("button", { name: /confirm rejection/i }));
-    fireEvent.click(screen.getByRole("button", { name: /confirm rejection/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/application #1 rejected/i)).toBeInTheDocument();

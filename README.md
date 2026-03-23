@@ -50,6 +50,36 @@ Install these before you start:
 > **Node version note:** Frontend tooling in this repo requires Node 20+. If you use nvm:
 > `nvm install 20 && nvm use 20`
 
+### Install prerequisites (macOS)
+
+If any prerequisite is missing, use:
+
+```bash
+# Homebrew (if needed)
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Ruby via rbenv
+brew install rbenv ruby-build
+rbenv install 3.3.5
+rbenv local 3.3.5
+rbenv rehash
+
+# Bundler
+gem install bundler
+
+# Node.js + npm via nvm
+brew install nvm
+mkdir -p ~/.nvm
+export NVM_DIR="$HOME/.nvm"
+[ -s "$(brew --prefix nvm)/nvm.sh" ] && . "$(brew --prefix nvm)/nvm.sh"
+nvm install 20
+nvm use 20
+
+# PostgreSQL
+brew install postgresql@14
+brew services start postgresql@14
+```
+
 ---
 
 ## Quick Start

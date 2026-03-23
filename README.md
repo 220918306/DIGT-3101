@@ -41,11 +41,14 @@ Install these before you start:
 |---|---|---|
 | Ruby | 3.3.5 | `ruby --version` |
 | Bundler | 2.x | `bundler --version` |
-| Node.js | 18+ | `node --version` |
+| Node.js | 20+ (LTS) | `node --version` |
 | npm | 9+ | `npm --version` |
 | PostgreSQL | 14+ | `psql --version` |
 
 > **macOS:** Install Ruby via rbenv — `rbenv install 3.3.5 && rbenv local 3.3.5`
+>
+> **Node version note:** Frontend tooling in this repo requires Node 20+. If you use nvm:
+> `nvm install 20 && nvm use 20`
 
 ---
 
@@ -98,6 +101,8 @@ API is live at `http://localhost:3000/api/v1`.
 Open a **second terminal**:
 
 ```bash
+# ensure correct Node version (from .nvmrc)
+nvm use
 cd frontend
 npm install
 npm run dev
@@ -135,6 +140,7 @@ A full HTML coverage report is saved to `backend/coverage/index.html` — open i
 ### Frontend
 
 ```bash
+nvm use
 cd frontend
 npm test -- --run
 ```

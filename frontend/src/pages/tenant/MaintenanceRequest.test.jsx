@@ -4,8 +4,10 @@ import { BrowserRouter } from "react-router-dom";
 import { AuthProvider } from "../../context/AuthContext";
 import MaintenanceRequest from "./MaintenanceRequest";
 import * as maintenanceApi from "../../api/maintenance";
+import * as leasesApi from "../../api/leases";
 
 vi.mock("../../api/maintenance");
+vi.mock("../../api/leases");
 
 function renderPage() {
   return render(
@@ -19,7 +21,14 @@ function renderPage() {
 
 describe("TC-10: Maintenance Request page", () => {
   beforeEach(() => {
+    localStorage.setItem("rems_user", JSON.stringify({ role: "tenant", name: "Tenant User" }));
+    localStorage.setItem("rems_token", "test-token");
     vi.spyOn(maintenanceApi, "getTickets").mockResolvedValue({ data: [] });
+    vi.spyOn(leasesApi, "getLeases").mockResolvedValue({ data: [] });
+  });
+
+  afterEach(() => {
+    localStorage.clear();
   });
 
   test("renders the submission form with priority buttons and description textarea", async () => {

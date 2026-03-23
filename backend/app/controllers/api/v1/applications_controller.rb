@@ -61,6 +61,7 @@ class Api::V1::ApplicationsController < Api::V1::BaseController
     app = Application.find(params[:id])
     app.update!(status: "rejected", rejection_reason: params[:reason],
                 reviewed_by_id: current_user.id)
+    NotificationService.new.notify_application_decision(application: app.reload, approved: false)
     render json: application_json(app)
   end
 

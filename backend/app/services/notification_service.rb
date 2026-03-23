@@ -59,6 +59,18 @@ class NotificationService
         "Payment ##{payment.id} of $#{payment.amount} confirmed via #{payment.payment_method}")
   end
 
+  # FR-05: Tenant notified when application is approved or rejected (TC-19)
+  def notify_application_decision(application:, approved:)
+    if approved
+      log("APPLICATION_APPROVED", application.tenant_id,
+          "Application ##{application.id} for Unit #{application.unit_id} was approved.")
+    else
+      reason = application.rejection_reason.presence
+      log("APPLICATION_REJECTED", application.tenant_id,
+          "Application ##{application.id} was rejected#{reason ? ": #{reason}" : ""}.")
+    end
+  end
+
   private
 
   def log(event, user_id, message)

@@ -86,6 +86,59 @@ class InvoicesControllerTest < ActionDispatch::IntegrationTest
     assert_response :forbidden
   end
 
+  test "clerk can regenerate invoice with replace_existing for a lease" do
+    BillingService.new.generate_monthly_invoices
+    inv = Invoice.find_by!(lease_id: @lease.id, billing_month: Date.today.beginning_of_month)
+    old_id = inv.id
+
+    post "/api/v1/invoices/regenerate",
+         params: { lease_id: @lease.id, replace_existing: true },
+         headers: { "Authorization" => "Bearer #{@clerk_token}" },
+         as: :json
+
+    assert_response :created
+    body = JSON.parse(response.body)
+    assert_operator body["id"], :!=, old_id
+    assert_nil Invoice.find_by(id: old_id)
+  end
+
+  test "clerk can regenerate without replace to add second invoice for same billing month" do
+    BillingService.new.generate_monthly_invoices
+    before = Invoice.where(lease_id: @lease.id, billing_month: Date.today.beginning_of_month).count
+    assert_equal 1, before
+
+    post "/api/v1/invoices/regenerate",
+         params: { lease_id: @lease.id, replace_existing: false },
+         headers: { "Authorization" => "Bearer #{@clerk_token}" },
+         as: :json
+
+    assert_response :created
+    assert_equal 2, Invoice.where(lease_id: @lease.id, billing_month: Date.today.beginning_of_month).count
+  end
+
+  test "regenerate replace returns 422 when invoice has payments" do
+    BillingService.new.generate_monthly_invoices
+    inv = Invoice.find_by!(lease_id: @lease.id, billing_month: Date.today.beginning_of_month)
+    inv.update_columns(amount_paid: 50, status: "partially_paid")
+
+    post "/api/v1/invoices/regenerate",
+         params: { lease_id: @lease.id, replace_existing: true },
+         headers: { "Authorization" => "Bearer #{@clerk_token}" },
+         as: :json
+
+    assert_response :unprocessable_entity
+    assert_match(/payments/i, JSON.parse(response.body)["error"])
+  end
+
+  test "tenant cannot call invoices regenerate" do
+    post "/api/v1/invoices/regenerate",
+         params: { lease_id: @lease.id, replace_existing: false },
+         headers: { "Authorization" => "Bearer #{@tenant_token}" },
+         as: :json
+
+    assert_response :forbidden
+  end
+
   test "clerk can patch utility line items on a regular invoice" do
     @invoice.invoice_line_items.create!(item_type: "rent", description: "Base Rent", amount: 2500)
     @invoice.invoice_line_items.create!(item_type: "electricity", description: "Electricity", amount: 10)

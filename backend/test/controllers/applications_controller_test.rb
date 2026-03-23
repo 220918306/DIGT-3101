@@ -152,6 +152,41 @@ class ApplicationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "rejected", JSON.parse(response.body)["status"]
   end
 
+  test "TC-19: reject notifies tenant via APPLICATION_REJECTED log" do
+    log_io = StringIO.new
+    previous = Rails.logger
+    Rails.logger = ActiveSupport::Logger.new(log_io)
+    app = create(:application, tenant: @tenant, unit: @unit, status: "pending")
+
+    patch "/api/v1/applications/#{app.id}/reject",
+          params: { reason: "Incomplete documents" },
+          headers: { "Authorization" => "Bearer #{@admin_token}" }, as: :json
+
+    assert_response :ok
+    assert_match(/APPLICATION_REJECTED/, log_io.string)
+    assert_match(/Incomplete documents/, log_io.string)
+  ensure
+    Rails.logger = previous
+  end
+
+  test "TC-19: approve notifies tenant via APPLICATION_APPROVED and LEASE_CREATED logs" do
+    log_io = StringIO.new
+    previous = Rails.logger
+    Rails.logger = ActiveSupport::Logger.new(log_io)
+    app = create(:application, tenant: @tenant, unit: @unit, status: "pending")
+
+    patch "/api/v1/applications/#{app.id}/approve",
+          params: { start_date: Date.today, end_date: 1.year.from_now.to_date,
+                    rent_amount: 2500, payment_cycle: "monthly" },
+          headers: { "Authorization" => "Bearer #{@admin_token}" }, as: :json
+
+    assert_response :ok
+    assert_match(/APPLICATION_APPROVED/, log_io.string)
+    assert_match(/LEASE_CREATED/, log_io.string)
+  ensure
+    Rails.logger = previous
+  end
+
   test "clerk cannot reject an application" do
     app = create(:application, tenant: @tenant, unit: @unit, status: "pending")
 

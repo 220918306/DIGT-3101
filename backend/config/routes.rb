@@ -29,7 +29,10 @@ Rails.application.routes.draw do
       end
 
       resources :invoices, only: [:index, :show] do
-        collection { post :generate }
+        collection do
+          post :generate
+          post :regenerate
+        end
         member { patch :utilities }
       end
 

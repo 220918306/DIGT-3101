@@ -53,6 +53,29 @@ class NotificationServiceTest < ActiveSupport::TestCase
     assert_nothing_raised { @service.send_lease_created(@lease) }
   end
 
+  test "TC-19: notify_application_decision approved includes APPLICATION_APPROVED" do
+    app = create(:application, tenant: @tenant, unit: @unit)
+    log_io = StringIO.new
+    prev = Rails.logger
+    Rails.logger = ActiveSupport::Logger.new(log_io)
+    @service.notify_application_decision(application: app, approved: true)
+    assert_match(/APPLICATION_APPROVED/, log_io.string)
+  ensure
+    Rails.logger = prev
+  end
+
+  test "TC-19: notify_application_decision rejected includes APPLICATION_REJECTED and reason" do
+    app = create(:application, tenant: @tenant, unit: @unit, rejection_reason: "Credit check failed")
+    log_io = StringIO.new
+    prev = Rails.logger
+    Rails.logger = ActiveSupport::Logger.new(log_io)
+    @service.notify_application_decision(application: app, approved: false)
+    assert_match(/APPLICATION_REJECTED/, log_io.string)
+    assert_match(/Credit check failed/, log_io.string)
+  ensure
+    Rails.logger = prev
+  end
+
   # TC-05: Upcoming viewing appointment notification
   test "TC-05a: send_upcoming_viewing_reminder logs without error for confirmed appointment" do
     appt = create(:appointment, tenant: @tenant, unit: @unit,

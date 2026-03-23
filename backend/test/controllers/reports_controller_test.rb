@@ -30,6 +30,16 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     assert body.key?("breakdown_by_tier")
   end
 
+  # TC-18: occupancy report responds within NFR-style latency budget (test env, generous ceiling)
+  test "TC-18: occupancy report completes within 2 seconds" do
+    started = Minitest.clock_time
+    get "/api/v1/reports/occupancy", headers: { "Authorization" => "Bearer #{@admin_token}" }
+    elapsed = Minitest.clock_time - started
+
+    assert_response :ok
+    assert_operator elapsed, :<, 2.0, "occupancy report took #{elapsed}s (expected < 2s)"
+  end
+
   test "clerk can access occupancy report" do
     get "/api/v1/reports/occupancy", headers: { "Authorization" => "Bearer #{@clerk_token}" }
     assert_response :ok

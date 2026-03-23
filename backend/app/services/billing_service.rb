@@ -1,6 +1,8 @@
 class BillingService
-  # FR-16: Multi-store discount tiers
-  DISCOUNT_TIERS = { 2 => 10.0 }.freeze
+  # FR-13 / FR-16: Multi-store discount — 10% when tenant has 3+ active leases (same billing cycle)
+  DISCOUNT_TIERS = { 3 => 10.0 }.freeze
+
+  class ReplaceInvoiceBlockedError < StandardError; end
 
   # FR-07: Automated monthly invoice generation (called by Sidekiq cron)
   def generate_monthly_invoices
@@ -45,6 +47,29 @@ class BillingService
     lease.update!(discount_rate: discount_percentage(lease.tenant_id))
     NotificationService.new.send_invoice_generated(invoice)
     invoice
+  end
+
+  # FR-07: Manual regeneration for a single lease (TC-07 / TC-08 / TC-09 — replace vs add for same billing month)
+  def regenerate_invoice_for_lease(lease_id, replace_existing:)
+    lease = Lease.find(lease_id)
+    raise ArgumentError, "Lease must be active" unless lease.status == "active"
+
+    billing_month = Date.today.beginning_of_month
+    existing        = Invoice.where(lease_id: lease.id, billing_month: billing_month)
+
+    if existing.exists?
+      if replace_existing
+        if existing.any? { |inv| inv.amount_paid.to_f.positive? }
+          raise ReplaceInvoiceBlockedError,
+                "Cannot replace invoices that already have payments recorded."
+        end
+        existing.destroy_all
+      else
+        return build_invoice(lease)
+      end
+    end
+
+    build_invoice(lease)
   end
 
   # FR-16: Calculate discount amount based on active lease count

@@ -16,8 +16,8 @@ class BillingServiceTest < ActiveSupport::TestCase
     end
   end
 
-  # TC-07: Idempotent — does not duplicate invoices for the same period
-  test "TC-07: does not generate duplicate invoices for same billing period" do
+  # Idempotent monthly run — does not duplicate invoices for the same period
+  test "generate_monthly_invoices does not duplicate invoices for same billing period" do
     BillingService.new.generate_monthly_invoices
     assert_no_difference "Invoice.count" do
       BillingService.new.generate_monthly_invoices
@@ -51,8 +51,8 @@ class BillingServiceTest < ActiveSupport::TestCase
     assert_equal 0,       invoice.remaining_balance
   end
 
-  # TC-11: Overpayment still marks invoice paid
-  test "TC-11: overpayment still marks invoice paid" do
+  # Overpayment edge case (not TC-11 overdue spec)
+  test "overpayment still marks invoice paid" do
     invoice = create(:invoice, lease: @lease, tenant: @tenant, amount: 2700, amount_paid: 0)
     invoice.mark_payment!(3000)
     assert_equal "paid", invoice.status
@@ -66,29 +66,44 @@ class BillingServiceTest < ActiveSupport::TestCase
     assert_equal 1000,             invoice.remaining_balance
   end
 
-  # TC-27: 10% discount applied when tenant has 2+ active leases (DISCOUNT_TIERS)
-  test "TC-27: applies 10% discount for tenants with 2 active leases" do
+  # TC-27: 10% discount only when tenant has 3+ active leases (FR-13)
+  test "TC-27: applies 10% discount for tenants with 3 active leases" do
     unit2 = create(:unit, :occupied, property: @property)
-    create(:lease, tenant: @tenant, unit: unit2, rent_amount: 2500)
+    unit3 = create(:unit, :occupied, property: @property)
+    create(:lease, tenant: @tenant, unit: unit2, rent_amount: 1500)
+    create(:lease, tenant: @tenant, unit: unit3, rent_amount: 1800)
 
     service = BillingService.new
     assert_equal 10.0, service.discount_percentage(@tenant.id)
   end
 
-  # TC-28: 10% discount still applies when tenant has 3+ active leases
-  test "TC-28: applies 10% discount for tenants with 3+ active leases" do
+  test "TC-27b: two active leases do not receive multi-store discount" do
+    unit2 = create(:unit, :occupied, property: @property)
+    create(:lease, tenant: @tenant, unit: unit2, rent_amount: 2500)
+
+    service = BillingService.new
+    assert_equal 0.0, service.discount_percentage(@tenant.id)
+  end
+
+  # TC-28: after terminating one lease, tenant drops below 3 — no discount next calculation
+  test "TC-28: discount removed when active lease count falls from 3 to 2" do
+    unit2 = create(:unit, :occupied, property: @property)
+    unit3 = create(:unit, :occupied, property: @property)
+    lease2 = create(:lease, tenant: @tenant, unit: unit2, rent_amount: 1500)
+    create(:lease, tenant: @tenant, unit: unit3, rent_amount: 1800)
+
+    service = BillingService.new
+    assert_equal 10.0, service.discount_percentage(@tenant.id)
+
+    lease2.update!(status: "expired")
+    assert_equal 0.0, service.discount_percentage(@tenant.id)
+  end
+
+  test "calculate_discount returns dollar amount for 3-lease multi-store tenant" do
     unit2 = create(:unit, :occupied, property: @property)
     unit3 = create(:unit, :occupied, property: @property)
     create(:lease, tenant: @tenant, unit: unit2, rent_amount: 2500)
     create(:lease, tenant: @tenant, unit: unit3, rent_amount: 2500)
-
-    service = BillingService.new
-    assert_equal 10.0, service.discount_percentage(@tenant.id)
-  end
-
-  test "calculate_discount returns dollar amount for multi-store tenant" do
-    unit2 = create(:unit, :occupied, property: @property)
-    create(:lease, tenant: @tenant, unit: unit2, rent_amount: 2500)
 
     service = BillingService.new
     assert_equal 250.0, service.calculate_discount(@tenant.id)
@@ -163,8 +178,7 @@ class BillingServiceTest < ActiveSupport::TestCase
     end
   end
 
-  # TC-07: Quarterly-cycle lease does not get a new invoice when not yet due
-  test "TC-07: quarterly lease does not generate invoice if last invoice was 1 month ago" do
+  test "quarterly lease does not generate invoice if last invoice was 1 month ago" do
     @lease.update!(payment_cycle: "quarterly")
     # Invoice generated at start of this month — only 1 month ago, not 3
     create(:invoice, lease: @lease, tenant: @tenant,
@@ -175,7 +189,7 @@ class BillingServiceTest < ActiveSupport::TestCase
     end
   end
 
-  test "TC-07b: quarterly lease DOES generate invoice when 3 months have passed" do
+  test "quarterly lease generates invoice when 3 months have passed" do
     @lease.update!(payment_cycle: "quarterly")
     # Last invoice was 3 months ago — due again now
     create(:invoice, lease: @lease, tenant: @tenant,
@@ -186,26 +200,24 @@ class BillingServiceTest < ActiveSupport::TestCase
     end
   end
 
-  # TC-08: When tenant has 2 active leases (10% discount per DISCOUNT_TIERS), the generated invoice
-  # includes a discount line item and the invoice total is reduced accordingly.
-  test "TC-08: invoice total reflects 10% discount for 2-lease tenant after regeneration" do
+  test "generated invoice includes 10% discount line item for 3-lease tenant" do
     unit2 = create(:unit, :occupied, property: @property)
+    unit3 = create(:unit, :occupied, property: @property)
     create(:lease, tenant: @tenant, unit: unit2, rent_amount: 2500)
+    create(:lease, tenant: @tenant, unit: unit3, rent_amount: 2500)
 
     BillingService.new.generate_monthly_invoices
-    invoice = Invoice.where(tenant: @tenant).last
+    invoice = Invoice.where(tenant: @tenant, lease_id: @lease.id).order(created_at: :desc).first
 
     discount_item = invoice.invoice_line_items.find_by(item_type: "discount")
-    assert_not_nil discount_item, "discount line item should be present for 2-lease tenant"
+    assert_not_nil discount_item, "discount line item should be present for 3-lease tenant"
     assert discount_item.amount.to_f < 0, "discount amount should be negative (reduction)"
     expected_discount = (@lease.rent_amount * 0.10).round(2)
     assert_in_delta expected_discount, discount_item.amount.to_f.abs, 1.0,
-                    "discount should be 10% of base rent for a 2-lease tenant"
+                    "discount should be 10% of base rent (first lease) for a 3-lease tenant"
   end
 
-  # TC-09: When invoice already exists for the period and is NOT replaced,
-  # the old invoice remains and a second run does NOT add a duplicate
-  test "TC-09: existing invoice for current period is not duplicated on re-run" do
+  test "monthly generate does not add duplicate invoice when period already exists" do
     # Invoice already exists for this billing month
     existing = create(:invoice, lease: @lease, tenant: @tenant,
                        billing_month: Date.today.beginning_of_month, status: "unpaid")
@@ -217,13 +229,50 @@ class BillingServiceTest < ActiveSupport::TestCase
     assert_equal "unpaid", existing.reload.status
   end
 
-  test "generate_monthly_invoices includes discount line item for multi-store tenant" do
+  test "generate_monthly_invoices includes discount line item for 3-lease tenant" do
     unit2 = create(:unit, :occupied, property: @property)
+    unit3 = create(:unit, :occupied, property: @property)
     create(:lease, tenant: @tenant, unit: unit2, rent_amount: 2500)
+    create(:lease, tenant: @tenant, unit: unit3, rent_amount: 2500)
 
     BillingService.new.generate_monthly_invoices
     types = Invoice.last.invoice_line_items.pluck(:item_type)
     assert_includes types, "discount"
+  end
+
+  # TC-07 / TC-08: replace existing unpaid invoice for current billing month
+  test "TC-07-08: regenerate with replace_existing removes prior invoice and creates a fresh one" do
+    BillingService.new.generate_monthly_invoices
+    first = Invoice.find_by!(lease_id: @lease.id, billing_month: Date.today.beginning_of_month)
+    first_id = first.id
+
+    service = BillingService.new
+    second = service.regenerate_invoice_for_lease(@lease.id, replace_existing: true)
+
+    assert_not_equal first_id, second.id
+    assert_nil Invoice.find_by(id: first_id)
+    assert_equal Date.today.beginning_of_month, second.billing_month
+  end
+
+  # TC-09: do not replace — second invoice for same billing month and lease
+  test "TC-09: regenerate without replace_existing keeps both invoices for same period" do
+    BillingService.new.generate_monthly_invoices
+    assert_equal 1, Invoice.where(lease_id: @lease.id, billing_month: Date.today.beginning_of_month).count
+
+    BillingService.new.regenerate_invoice_for_lease(@lease.id, replace_existing: false)
+
+    assert_equal 2, Invoice.where(lease_id: @lease.id, billing_month: Date.today.beginning_of_month).count
+  end
+
+  test "regenerate with replace_existing raises when invoice has payments" do
+    BillingService.new.generate_monthly_invoices
+    inv = Invoice.find_by!(lease_id: @lease.id, billing_month: Date.today.beginning_of_month)
+    inv.update_columns(amount_paid: 100, status: "partially_paid")
+
+    err = assert_raises(BillingService::ReplaceInvoiceBlockedError) do
+      BillingService.new.regenerate_invoice_for_lease(@lease.id, replace_existing: true)
+    end
+    assert_match(/payments/i, err.message)
   end
 
 end

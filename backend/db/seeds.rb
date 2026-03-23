@@ -49,13 +49,15 @@ end
 occupied_unit1 = Unit.find_by!(unit_number: "B201")
 occupied_unit2 = Unit.find_by!(unit_number: "C302")
 occupied_unit3 = Unit.find_by!(unit_number: "A102")
+occupied_unit4 = Unit.find_by!(unit_number: "D401")
 occupied_unit3.update!(status: "occupied", available: false)
+occupied_unit4.update!(status: "occupied", available: false)
 
 # ── Active Leases ──────────────────────────────────────────────────────────────
 lease1 = Lease.create!(
   tenant: tenant1, unit: occupied_unit1,
   start_date: 6.months.ago.to_date, end_date: 6.months.from_now.to_date,
-  rent_amount: 5000, payment_cycle: "monthly", status: "active", discount_rate: 0
+  rent_amount: 5000, payment_cycle: "monthly", status: "active", discount_rate: 10
 )
 
 lease2 = Lease.create!(
@@ -64,11 +66,17 @@ lease2 = Lease.create!(
   rent_amount: 4200, payment_cycle: "monthly", status: "active", discount_rate: 0
 )
 
-# Tenant1 has 2 active leases, qualifying for 10% multi-store discount.
+# Tenant1 has 3 active leases — qualifies for 10% multi-store discount (3+ units).
 lease3 = Lease.create!(
   tenant: tenant1, unit: occupied_unit3,
   start_date: 1.month.ago.to_date, end_date: 11.months.from_now.to_date,
   rent_amount: 3200, payment_cycle: "monthly", status: "active", discount_rate: 10
+)
+
+lease4 = Lease.create!(
+  tenant: tenant1, unit: occupied_unit4,
+  start_date: 2.months.ago.to_date, end_date: 10.months.from_now.to_date,
+  rent_amount: 2100, payment_cycle: "monthly", status: "active", discount_rate: 10
 )
 
 # ── Invoices ──────────────────────────────────────────────────────────────────
@@ -146,8 +154,7 @@ puts "\nDatabase seeded successfully!"
 puts "=" * 50
 puts "Admin:   admin@rems.com  / password123"
 puts "Clerk:   clerk@rems.com  / password123"
-puts "Tenant1: tenant1@rems.com / password123 (active lease)"
+puts "Tenant1: tenant1@rems.com / password123 (3 active leases, 10% multi-store discount)"
 puts "Tenant2: tenant2@rems.com / password123 (active lease)"
-puts "Tenant1 now has 2 active leases (10% discount eligible)"
 puts "Tenant3: tenant3@rems.com / password123 (pending application)"
 puts "=" * 50

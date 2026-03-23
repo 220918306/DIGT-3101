@@ -19,6 +19,7 @@ class LeaseFactory
       )
 
       application.update!(status: "approved", approved_at: Time.current)
+      NotificationService.new.notify_application_decision(application: application.reload, approved: true)
       application.unit.mark_as_occupied!
       NotificationService.new.send_lease_created(lease)
       lease

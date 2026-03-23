@@ -28,6 +28,24 @@ class Api::V1::InvoicesController < Api::V1::BaseController
     render json: { message: "Generated #{count} invoice(s) for active leases" }
   end
 
+  # POST /api/v1/invoices/regenerate — FR-07: Regenerate invoice for one lease (replace or add for same billing month)
+  def regenerate
+    authorize_roles!("clerk", "admin")
+    lease_id = params.require(:lease_id)
+    replace  = ActiveModel::Type::Boolean.new.cast(params.fetch(:replace_existing, false))
+
+    invoice = BillingService.new.regenerate_invoice_for_lease(lease_id, replace_existing: replace)
+    render json: invoice_json(invoice).merge(
+      line_items: invoice.invoice_line_items.map { |li| line_item_json(li) }
+    ), status: :created
+  rescue ActiveRecord::RecordNotFound
+    render json: { error: "Lease not found" }, status: :not_found
+  rescue ArgumentError => e
+    render json: { error: e.message }, status: :unprocessable_entity
+  rescue BillingService::ReplaceInvoiceBlockedError => e
+    render json: { error: e.message }, status: :unprocessable_entity
+  end
+
   # PATCH /api/v1/invoices/:id/utilities — clerk/admin: set monthly utility line items (not damage invoices)
   def utilities
     authorize_roles!("clerk", "admin")
